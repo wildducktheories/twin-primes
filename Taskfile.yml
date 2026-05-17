@@ -11,6 +11,7 @@ tasks:
     cmds:
       - pdflatex -interaction=nonstopmode main.tex
       - pdflatex -interaction=nonstopmode main.tex
+      - mv main.pdf wildducktheories-bridging-conjecture.pdf
 
   animate:
     desc: Render 6ab±a±b twin prime witnesses animation
