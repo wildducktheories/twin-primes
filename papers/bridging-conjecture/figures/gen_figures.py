@@ -1,32 +1,21 @@
 """Generate figures for the Bridging Conjecture paper appendix."""
 
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'lib'))
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
 
-# ── helpers ──────────────────────────────────────────────────────────────────
-
-def sieve_primes(n):
-    sieve = bytearray([1]) * (n + 1)
-    sieve[0] = sieve[1] = 0
-    for i in range(2, int(n**0.5) + 1):
-        if sieve[i]:
-            sieve[i*i::i] = bytearray(len(sieve[i*i::i]))
-    return sieve
-
-def build_A002822(limit):
-    """Return sorted list of m such that 6m-1 and 6m+1 are both prime."""
-    top = 6 * limit + 2
-    sieve = sieve_primes(top)
-    return [m for m in range(1, limit + 1)
-            if sieve[6*m - 1] and sieve[6*m + 1]]
+from twin_primes import prime_sieve, A002822, middle_number_pairs
 
 # ── data ─────────────────────────────────────────────────────────────────────
 
 LIMIT = 100_000
-A = build_A002822(LIMIT)
-A_set = set(A)
+sieve = prime_sieve(6 * LIMIT + 1)
+A = list(A002822(range(1, LIMIT + 1), sieve))
 
 # ── Figure 1: Gap ratio ───────────────────────────────────────────────────────
 
@@ -56,23 +45,11 @@ print("gap_ratio.pdf written")
 
 # ── Figure 2: Decomposition count ────────────────────────────────────────────
 
-# For each m in A, count pairs (a, b) with a <= b, a+b = m, a,b in A_set
-# Only go to 20000 to keep it tractable; pairs is O(|A|^2) naively
 DECOMP_LIMIT = 20_000
-A_small = [m for m in A if m <= DECOMP_LIMIT]
-A_small_set = set(A_small)
+pairs = middle_number_pairs(DECOMP_LIMIT)
 
-decomp_m = []
-decomp_count = []
-for m in A_small:
-    if m <= 1:
-        continue
-    count = sum(1 for a in A_small if a < m and (m - a) in A_small_set and a <= m - a)
-    decomp_m.append(m)
-    decomp_count.append(count)
-
-decomp_m = np.array(decomp_m)
-decomp_count = np.array(decomp_count)
+decomp_m = np.array(sorted(m for m in pairs if m > 1))
+decomp_count = np.array([len(pairs[m]) for m in decomp_m])
 
 # reference curve c * m / (log m)^2, scaled to match data mean
 mask = decomp_m > 10
