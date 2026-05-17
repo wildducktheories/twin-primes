@@ -1,0 +1,17 @@
+version: '3'
+
+tasks:
+  edit:
+    desc: Open Jupyter notebook
+    cmd: PYTHONPATH={{.ROOT_DIR}}/src:{{.ROOT_DIR}}/../plumial/src${PYTHONPATH:+:}${PYTHONPATH} jupyter notebook
+
+  pdf:
+    desc: Build bridging-conjecture PDF
+    dir: papers/bridging-conjecture
+    cmds:
+      - pdflatex -interaction=nonstopmode main.tex
+      - pdflatex -interaction=nonstopmode main.tex
+
+  animate:
+    desc: Render 6ab±a±b twin prime witnesses animation
+    cmd: manim animations/6ab-a-b-1/twin_primes_3d.py TwinPrimes3D --media_dir animations/6ab-a-b-1/media
