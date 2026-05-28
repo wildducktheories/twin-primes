@@ -472,8 +472,9 @@ function checkHover() {
         `δ<sub>uv</sub> rank = ${n.t.toFixed(3)}`;
     } else {
       const kindLabel = n.kind === 'one_prime' ? 'one prime (pink)' : 'both composite (green)';
+      const gen = nwGeneration(n);
       tooltip.innerHTML =
-        `w = ${n.w} &nbsp;|&nbsp; non-witness<br>` +
+        `w = ${n.w} &nbsp;|&nbsp; non-witness &nbsp;|&nbsp; generation ${gen - 1}+1<br>` +
         `6w±1: ${p1}, ${p2}<br>` +
         `first pair: ${prog}<br>` +
         `kind: ${kindLabel}`;
@@ -486,14 +487,20 @@ function checkHover() {
 }
 
 // ── ancestry highlight ───────────────────────────────────────────────────────
-// Click a witness node to trace its progenitor chain back to witness 1.
-// Everything off the path dims; the path glows gold.
+// Click any node (witness or non-witness) to trace its progenitor chain back
+// to witness 1.  Everything off the path dims; the path glows gold.
 // Click background or the same node again to clear.
 
 let ancestryActive = false;
 const GOLD = new THREE.Color(1.0, 0.85, 0.2);
 const DIM_OPACITY = 0.08;
 
+// Build a map of non-witnesses by w for quick lookup
+const nwMap = {};
+nonWitnesses.forEach(nw => { nwMap[nw.w] = nw; });
+
+// Walk progenitors — works for both witnesses (nodeMap) and non-witnesses (nwMap).
+// Non-witness progenitors are always witnesses, so the chain terminates at witness 1.
 function getAncestorSet(w) {
   const ancestors = new Set();
   const stack = [w];
@@ -501,7 +508,7 @@ function getAncestorSet(w) {
     const cur = stack.pop();
     if (ancestors.has(cur)) continue;
     ancestors.add(cur);
-    const n = nodeMap[cur];
+    const n = nodeMap[cur] || nwMap[cur];
     if (n && n.prog) {
       stack.push(n.prog[0]);
       stack.push(n.prog[1]);
@@ -510,19 +517,27 @@ function getAncestorSet(w) {
   return ancestors;
 }
 
+// For a non-witness, generation = max(prog generations) + 1
+function nwGeneration(nw) {
+  if (!nw.prog) return 1;
+  const g0 = (nodeMap[nw.prog[0]] || {}).generation || 0;
+  const g1 = (nodeMap[nw.prog[1]] || {}).generation || 0;
+  return Math.max(g0, g1) + 1;
+}
+
 function applyAncestry(w) {
   ancestryActive = true;
   const ancestors = getAncestorSet(w);
 
-  // Dim / brighten nodes
+  // Witness nodes
   nodes.forEach(n => {
     const mesh = nodeMeshes[n.w];
     if (!mesh.visible) return;
     if (ancestors.has(n.w)) {
       mesh.material.color.copy(GOLD);
       mesh.material.emissive.copy(GOLD).multiplyScalar(0.4);
-      mesh.material.opacity = 1;
       mesh.material.transparent = false;
+      mesh.material.opacity = 1;
     } else {
       mesh.material.color.copy(dimColour(n.t)).multiplyScalar(0.15);
       mesh.material.emissive.setHex(0x000000);
@@ -531,7 +546,21 @@ function applyAncestry(w) {
     }
   });
 
-  // Dim / brighten edges: show only edges where both endpoints are ancestors
+  // Non-witness nodes
+  nwMeshes.forEach(mesh => {
+    const n = mesh.userData;
+    if (ancestors.has(n.w)) {
+      mesh.material.color.copy(GOLD);
+      mesh.material.emissive.copy(GOLD).multiplyScalar(0.4);
+      mesh.material.transparent = false;
+      mesh.material.opacity = 1;
+    } else {
+      mesh.material.transparent = true;
+      mesh.material.opacity = DIM_OPACITY;
+    }
+  });
+
+  // Edges: show only those where both endpoints are witnesses in the ancestor set
   edges.forEach((e, i) => {
     if (!edgeVisibility[i]) return;
     const onPath = ancestors.has(e.src) && ancestors.has(e.dst);
@@ -560,7 +589,12 @@ function clearAncestry() {
     mesh.material.opacity = 1;
   });
 
-  // Restore edges
+  nwMeshes.forEach(mesh => {
+    mesh.material.transparent = true;
+    mesh.material.opacity = 0.55;
+    mesh.material.emissive.setHex(0x000000);
+  });
+
   edges.forEach((e, i) => {
     if (!edgeVisibility[i]) return;
     const base = i * 6;
@@ -580,13 +614,15 @@ renderer.domElement.addEventListener('click', e => {
   if (controls.enabled && e.detail === 0) return;
 
   raycaster.setFromCamera(pointer, camera);
-  const meshList = Object.values(nodeMeshes).filter(m => m.visible);
+  const meshList = [
+    ...Object.values(nodeMeshes).filter(m => m.visible),
+    ...nwMeshes,
+  ];
   const hits = raycaster.intersectObjects(meshList);
 
-  if (hits.length > 0 && hits[0].object.userData.isWitness) {
+  if (hits.length > 0) {
     const mesh = hits[0].object;
     if (mesh === clickedMesh) {
-      // Second click on same node — clear
       clickedMesh = null;
       clearAncestry();
     } else {
