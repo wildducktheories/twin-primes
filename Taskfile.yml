@@ -4,6 +4,9 @@ includes:
   background-research:
     taskfile: papers/background-research/Taskfile.yml
     dir: papers/background-research
+  structural-conjecture:
+    taskfile: papers/structural-conjecture/Taskfile.yml
+    dir: papers/structural-conjecture
   bridging-conjecture:
     taskfile: papers/bridging-conjecture/Taskfile.yml
     dir: papers/bridging-conjecture
@@ -40,6 +43,7 @@ tasks:
     desc: Build all papers PDFs
     cmds:
       - task: background-research:default
+      - task: structural-conjecture:default
       - task: bridging-conjecture:default
       - task: dna-argument:default
       - task: dubners-ball:default
@@ -51,6 +55,7 @@ tasks:
     desc: Remove LaTeX auxiliary files from all papers
     cmds:
       - task: background-research:clean
+      - task: structural-conjecture:clean
       - task: bridging-conjecture:clean
       - task: dna-argument:clean
       - task: dubners-ball:clean
@@ -62,6 +67,7 @@ tasks:
     desc: Remove auxiliary files and PDFs from all papers
     cmds:
       - task: background-research:distclean
+      - task: structural-conjecture:distclean
       - task: bridging-conjecture:distclean
       - task: dna-argument:distclean
       - task: dubners-ball:distclean
