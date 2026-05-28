@@ -10,6 +10,7 @@ import matplotlib
 matplotlib.use('Agg')
 
 from twin_primes import prime_sieve, A002822, middle_number_pairs
+from twin_primes.terminology import COLOURS
 
 # ── data ─────────────────────────────────────────────────────────────────────
 
@@ -17,7 +18,7 @@ LIMIT = 5000
 D = {1, 16, 67, 86, 131, 151, 186, 191, 211, 226, 541, 701}
 
 sieve = prime_sieve(6 * LIMIT + 1)
-a002822 = sorted(m for m in range(1, LIMIT + 1) if sieve[6*m-1] and sieve[6*m+1])
+a002822 = sorted(w for w in range(1, LIMIT + 1) if sieve[6*w-1] and sieve[6*w+1])
 a002822_set = set(a002822)
 pairs = middle_number_pairs(LIMIT)
 
@@ -35,15 +36,16 @@ rolling_mean = np.convolve(ratios, np.ones(window)/window, mode='valid')
 roll_x = A[window//2 : window//2 + len(rolling_mean)]
 
 fig, ax = plt.subplots(figsize=(7, 4))
-ax.scatter(A[1:], ratios, s=1, alpha=0.25, color='steelblue', label='gap/m_{n+1}')
-ax.plot(roll_x, rolling_mean, color='darkorange', linewidth=1.5,
+ax.scatter(A[1:], ratios, s=1, alpha=0.25, color=COLOURS['primary'],
+           label=r'gap$(n)/w_{n+1}$')
+ax.plot(roll_x, rolling_mean, color=COLOURS['prediction'], linewidth=1.5,
         label=f'Rolling mean (window={window})')
-ax.axhline(y=0.5, color='red', linestyle='--', linewidth=1,
-           label='Bridging Conjecture bound (gap/m < 1/2)')
+ax.axhline(y=0.5, color=COLOURS['anomaly'], linestyle='--', linewidth=1,
+           label='bridging conjecture bound (gap$/w < 1/2$)')
 ax.set_xscale('log')
 ax.set_yscale('log')
-ax.set_xlabel('$m_{n+1}$')
-ax.set_ylabel(r'gap$(n) / m_{n+1}$')
+ax.set_xlabel('$w_{n+1}$')
+ax.set_ylabel(r'gap$(n) / w_{n+1}$')
 ax.set_title('Gap ratio for consecutive elements of $A002822$')
 ax.legend(fontsize=8, markerscale=4)
 fig.tight_layout()
@@ -53,87 +55,81 @@ print("gap_ratio.pdf written")
 
 # ── Figure 2: Decomposition gap ratio ────────────────────────────────────────
 
-xs_inner, ys_inner = [], []
-xs_largest, ys_largest = [], []
-xs_smallest, ys_smallest = [], []
+import matplotlib.colors as mcolors
+
+# Build a linear red→blue colourmap matching the terminology scheme
+cmap_rb = mcolors.LinearSegmentedColormap.from_list(
+    'rb', [COLOURS['anomaly'], COLOURS['surface']]
+)
+
+xs_all, ys_all, cs_all = [], [], []
 xs_D, ys_D = [], []
 
-for m in a002822:
-    decomps = pairs.get(m, [])
+for w in a002822:
+    decomps = pairs.get(w, [])
     if not decomps:
-        xs_D.append(m)
+        xs_D.append(w)
         ys_D.append(1.0)
         continue
-    gaps = [(b - a, a, b) for (a, b) in decomps]
-    max_gap = max(g for g, _, _ in gaps)
-    min_gap = min(g for g, _, _ in gaps)
-    for g, a, b in gaps:
-        ratio = g / m
-        if g == max_gap:
-            xs_largest.append(m)
-            ys_largest.append(ratio)
-        elif g == min_gap:
-            xs_smallest.append(m)
-            ys_smallest.append(ratio)
-        else:
-            xs_inner.append(m)
-            ys_inner.append(ratio)
+    for (u, v) in decomps:
+        ratio = (v - u) / w
+        xs_all.append(w)
+        ys_all.append(ratio)
+        cs_all.append(ratio)   # colour by own g/w: high→red, low→blue
 
-for m in D:
-    if m not in a002822_set:
-        xs_D.append(m)
+for w in D:
+    if w not in a002822_set:
+        xs_D.append(w)
         ys_D.append(1.0)
 
 fig, ax = plt.subplots(figsize=(7, 4))
-ax.scatter(xs_inner, ys_inner, s=1, alpha=0.3, color='steelblue',
-           label='Decompositions (inner)')
-ax.scatter(xs_largest, ys_largest, s=4, alpha=0.6, color='darkorange',
-           label='Largest-gap decomposition')
-ax.scatter(xs_smallest, ys_smallest, s=4, alpha=0.6, color='green',
-           label='Smallest-gap decomposition')
-ax.scatter(xs_D, ys_D, s=12, alpha=0.8, color='red', marker='x',
-           label=r'A243956 (trivial: $g/m = 1$)')
-ax.axhline(y=1.0, color='red', linestyle='--', linewidth=0.8, alpha=0.5)
+sc = ax.scatter(xs_all, ys_all, s=2, alpha=0.5, c=cs_all,
+                cmap=cmap_rb, vmin=0, vmax=1)
+ax.scatter(xs_D, ys_D, s=20, alpha=0.9, color=COLOURS['satellite'],
+           marker='x', linewidths=0.8, label=r'$\mathcal{X}$ (A243956, $r = 1$)')
+ax.axhline(y=1.0, color=COLOURS['anomaly'], linestyle='--', linewidth=0.8, alpha=0.5)
+cbar = fig.colorbar(sc, ax=ax, pad=0.02)
+cbar.set_label(r'$r$ (lopsided $\to$ balanced)', fontsize=8)
 ax.set_xscale('log')
 ax.set_yscale('log')
-ax.set_xlabel('$m$')
-ax.set_ylabel(r'$g / m$,\ \ $g = b - a$')
-ax.set_title(r'Decomposition gap ratio for $A002822 \cup A243956$')
-ax.legend(fontsize=8, markerscale=3)
+ax.set_xlabel('$w$')
+ax.set_ylabel(r'$r = (v-u)/w$')
+ax.set_title(r'Decomposition gap ratio $r$ for $A002822 \cup \mathcal{X}$')
+ax.legend(fontsize=8)
 fig.tight_layout()
 fig.savefig('decomp_gap_ratio.pdf', dpi=150)
 plt.close(fig)
 print("decomp_gap_ratio.pdf written")
 
-# ── Figure 3: Ratio of smallest to largest decomposition gap ─────────────────
-# For each m with at least 2 decompositions, plot g_min/g_max where g = b-a.
-# A value approaching 1 means all decompositions have nearly equal gaps —
-# the dangerous case where a ≈ b ≈ m/2 for every decomposition, threatening
-# the 2K gap bound. Staying well below 1 confirms the spread continues to grow.
+# ── Figure 3: Ratio of smallest to largest gap ratio ─────────────────────────
+# For each w with at least 2 decompositions, plot r_min/r_max where r = (v-u)/w.
+# A value approaching 1 means all decompositions have nearly equal gap ratios —
+# the dangerous case where u ≈ v ≈ w/2 for every decomposition, threatening
+# the 2V gap bound. Staying well below 1 confirms the spread continues to grow.
 
 xs_ratio, ys_ratio = [], []
 
-for m in a002822:
-    decomps = pairs.get(m, [])
+for w in a002822:
+    decomps = pairs.get(w, [])
     if len(decomps) < 2:
         continue
-    gaps = [b - a for (a, b) in decomps]
-    max_gap = max(gaps)
-    min_gap = min(gaps)
+    raw_gaps = [v - u for (u, v) in decomps]
+    max_gap = max(raw_gaps)
+    min_gap = min(raw_gaps)
     if max_gap > 0:
-        xs_ratio.append(m)
+        xs_ratio.append(w)
         ys_ratio.append(min_gap / max_gap)
 
 fig3, ax3 = plt.subplots(figsize=(7, 4))
-ax3.scatter(xs_ratio, ys_ratio, s=2, alpha=0.4, color='steelblue',
-            label=r'$g_{\min} / g_{\max}$')
-ax3.axhline(y=1.0, color='red', linestyle='--', linewidth=0.8, alpha=0.6,
+ax3.scatter(xs_ratio, ys_ratio, s=2, alpha=0.4, color=COLOURS['primary'],
+            label=r'$r_{\min} / r_{\max}$')
+ax3.axhline(y=1.0, color=COLOURS['anomaly'], linestyle='--', linewidth=0.8, alpha=0.6,
             label='ratio = 1 (all decompositions equally balanced)')
 ax3.set_xscale('log')
 ax3.set_yscale('log')
-ax3.set_xlabel('$m$')
-ax3.set_ylabel(r'$g_{\min} / g_{\max}$')
-ax3.set_title(r'Ratio of Smallest to Largest Decomposition Gap for $A002822$')
+ax3.set_xlabel('$w$')
+ax3.set_ylabel(r'$r_{\min} / r_{\max}$')
+ax3.set_title(r'Ratio of smallest to largest gap ratio $r$ for $A002822$')
 ax3.legend(fontsize=8)
 fig3.tight_layout()
 fig3.savefig('decomp_gap_ratio_spread.pdf', dpi=150)

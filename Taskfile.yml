@@ -1,5 +1,31 @@
 version: '3'
 
+includes:
+  background-research:
+    taskfile: papers/background-research/Taskfile.yml
+    dir: papers/background-research
+  bridging-conjecture:
+    taskfile: papers/bridging-conjecture/Taskfile.yml
+    dir: papers/bridging-conjecture
+  dna-argument:
+    taskfile: papers/dna-argument/Taskfile.yml
+    dir: papers/dna-argument
+  dubners-ball:
+    taskfile: papers/dubners-ball/Taskfile.yml
+    dir: papers/dubners-ball
+  heuristics:
+    taskfile: papers/heuristics/Taskfile.yml
+    dir: papers/heuristics
+  muxing:
+    taskfile: papers/muxing/Taskfile.yml
+    dir: papers/muxing
+  tpc-proof:
+    taskfile: papers/tpc-proof/Taskfile.yml
+    dir: papers/tpc-proof
+  twin-prime-machine:
+    taskfile: papers/twin-prime-machine/Taskfile.yml
+    dir: papers/twin-prime-machine
+
 tasks:
   edit:
     desc: Open Jupyter notebook
@@ -7,12 +33,84 @@ tasks:
 
   pdf:
     desc: Build bridging-conjecture PDF
-    dir: papers/bridging-conjecture
     cmds:
-      - pdflatex -interaction=nonstopmode main.tex
-      - pdflatex -interaction=nonstopmode main.tex
-      - mv main.pdf wildducktheories-bridging-conjecture.pdf
+      - task: bridging-conjecture:default
+
+  pdfs:
+    desc: Build all papers PDFs
+    cmds:
+      - task: background-research:default
+      - task: bridging-conjecture:default
+      - task: dna-argument:default
+      - task: dubners-ball:default
+      - task: heuristics:default
+      - task: tpc-proof:default
+      - task: twin-prime-machine:default
+
+  clean:
+    desc: Remove LaTeX auxiliary files from all papers
+    cmds:
+      - task: background-research:clean
+      - task: bridging-conjecture:clean
+      - task: dna-argument:clean
+      - task: dubners-ball:clean
+      - task: heuristics:clean
+      - task: tpc-proof:clean
+      - task: twin-prime-machine:clean
+
+  distclean:
+    desc: Remove auxiliary files and PDFs from all papers
+    cmds:
+      - task: background-research:distclean
+      - task: bridging-conjecture:distclean
+      - task: dna-argument:distclean
+      - task: dubners-ball:distclean
+      - task: heuristics:distclean
+      - task: tpc-proof:distclean
+      - task: twin-prime-machine:distclean
+
+  export:confidential:
+    desc: Build a timestamped confidential tgz bundle with SHA1 manifest
+    cmds:
+      - bin/twin-primes export confidential
+
+  export:s3:
+    desc: Upload latest dist bundle and dubner-ball viewer to S3 (public)
+    cmds:
+      - bin/twin-primes export s3
+
+  dist:unpack:
+    desc: Unpack latest dist bundle to /tmp and open in VS Code
+    cmds:
+      - bin/twin-primes dist unpack
+
+  dist:next-s3:
+    desc: Report the HTTPS URL the latest dist bundle will have once pushed to S3
+    cmds:
+      - bin/twin-primes dist next-s3
+
+  serve:
+    desc: Serve repo on http://localhost:8765 (for 3d/dubner-ball/index.html)
+    cmd: python -m http.server 8765
 
   animate:
     desc: Render 6ab±a±b twin prime witnesses animation
     cmd: manim animations/6ab-a-b-1/twin_primes_3d.py TwinPrimes3D --media_dir animations/6ab-a-b-1/media
+
+  dataset:generate:
+    desc: "Generate a named dataset — usage: task dataset:generate -- {name} [args]"
+    cmd: bin/twin-primes dataset generate {{.CLI_ARGS}}
+
+  dataset:dubner-ball:
+    desc: Generate dubner-ball geometry JSON (LIMIT=20000, with non-witnesses)
+    cmd: >
+      bin/twin-primes dataset generate dubner-ball 20000
+      --non-witnesses --output {{.ROOT_DIR}}/3d/dubner-ball/data.json
+
+  dataset:partition-counts:
+    desc: Generate TPMP Table 1 partition counts (N=400000)
+    cmds:
+      - mkdir -p {{.ROOT_DIR}}/data
+      - >
+        bin/twin-primes dataset generate partition-counts 400000
+        --output {{.ROOT_DIR}}/data/partition-counts.json

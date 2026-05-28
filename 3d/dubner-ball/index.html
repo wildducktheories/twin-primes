@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dubner Ball — Twin Prime Witness Sieve</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a12; color: #ccc; font-family: monospace; overflow: hidden; }
+    #canvas { display: block; width: 100vw; height: 100vh; }
+
+    #ui {
+      position: fixed; top: 12px; left: 12px;
+      display: flex; flex-direction: column; gap: 6px;
+      pointer-events: none;
+    }
+    #ui h1 { font-size: 13px; color: #fff; font-weight: normal; }
+    #ui .stat { font-size: 11px; color: #888; }
+
+    #controls {
+      position: fixed; top: 12px; right: 12px;
+      font-size: 11px; color: #666; text-align: right;
+      line-height: 1.8;
+    }
+
+    #tooltip {
+      position: fixed; bottom: 16px; left: 16px;
+      font-size: 12px; color: #eee;
+      background: rgba(0,0,0,0.7);
+      padding: 6px 10px; border-radius: 4px;
+      display: none;
+      pointer-events: none;
+      max-width: 260px;
+    }
+
+    #playbar {
+      position: fixed; bottom: 16px; right: 16px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: #888;
+    }
+    #playbar button {
+      background: #222; border: 1px solid #444; color: #ccc;
+      padding: 3px 10px; border-radius: 3px; cursor: pointer;
+      font-family: monospace; font-size: 11px;
+    }
+    #playbar button:hover { background: #333; }
+    #step-label { min-width: 70px; }
+
+    #colourbar {
+      position: fixed; bottom: 48px; right: 16px;
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; color: #666;
+    }
+    #gradient-bar {
+      width: 100px; height: 8px; border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+  <h1>Dubner Ball</h1>
+  <div class="stat" id="stat-nodes">|A| = 0</div>
+  <div class="stat" id="stat-nw"></div>
+  <div class="stat" id="stat-limit">limit = 500</div>
+</div>
+
+<div id="controls">
+  drag · rotate<br>
+  scroll · zoom<br>
+  right-drag · pan<br>
+  hover · inspect<br>
+  space · play/pause<br>
+  ← → · step
+</div>
+
+<div id="tooltip"></div>
+
+<div id="colourbar">
+  <span style="color:#1533e6">balanced</span>
+  <canvas id="gradient-bar" width="100" height="8"></canvas>
+  <span style="color:#d91a1a">lopsided</span>
+</div>
+
+<div id="playbar">
+  <button id="btn-reset">⏮</button>
+  <button id="btn-prev">◀</button>
+  <button id="btn-play">▶</button>
+  <button id="btn-next">▶|</button>
+  <span id="step-label">step 0 / 0</span>
+</div>
+
+<!-- Three.js from CDN -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// ── colour helpers ────────────────────────────────────────────────────────────
+
+// Blue→cyan→yellow→orange→red, saturated through the midpoint (no washed-out white)
+function coolwarm(t) {
+  t = Math.max(0, Math.min(1, t));
+  // Control points: t=0 blue, t=0.25 cyan, t=0.5 yellow, t=0.75 orange, t=1 red
+  const stops = [
+    [0.08, 0.20, 0.90],  // t=0    blue
+    [0.10, 0.75, 0.85],  // t=0.25 cyan
+    [0.95, 0.90, 0.10],  // t=0.5  yellow
+    [0.95, 0.45, 0.05],  // t=0.75 orange
+    [0.85, 0.10, 0.10],  // t=1    red
+  ];
+  const pos = t * (stops.length - 1);
+  const i = Math.min(Math.floor(pos), stops.length - 2);
+  const f = pos - i;
+  const a = stops[i], b = stops[i + 1];
+  return new THREE.Color(
+    a[0] + f * (b[0] - a[0]),
+    a[1] + f * (b[1] - a[1]),
+    a[2] + f * (b[2] - a[2]),
+  );
+}
+
+function dimColour(t) {
+  return coolwarm(t).multiplyScalar(1.8);  // >1 drives bloom threshold
+}
+
+// ── gradient bar ──────────────────────────────────────────────────────────────
+
+{
+  const canvas = document.getElementById('gradient-bar');
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 100, 0);
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    const c = coolwarm(t);
+    grad.addColorStop(t, `rgb(${Math.round(c.r*255)},${Math.round(c.g*255)},${Math.round(c.b*255)})`);
+  }
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 100, 8);
+}
+
+// ── scene setup ───────────────────────────────────────────────────────────────
+
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ReinhardToneMapping;
+renderer.toneMappingExposure = 1.2;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a12);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 1000);
+camera.position.set(0, 0, 14);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 1;
+controls.maxDistance = 200;
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+
+// ── bloom post-processing ─────────────────────────────────────────────────────
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(innerWidth, innerHeight),
+  0.23,  // strength
+  0.4,   // radius
+  0.1    // threshold — only pixels brighter than this bloom
+);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
+
+// Ambient + directional light (helps spheres read as 3D)
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(5, 10, 7);
+scene.add(dirLight);
+
+// ── data ─────────────────────────────────────────────────────────────────────
+
+const data = await fetch('data.json').then(r => r.json());
+const { nodes, edges, generations, limit } = data;
+const nonWitnesses = data.non_witnesses || [];
+
+document.getElementById('stat-limit').textContent = `limit = ${limit}`;
+if (nonWitnesses.length > 0) {
+  const nOne = nonWitnesses.filter(n => n.kind === 'one_prime').length;
+  const nComp = nonWitnesses.filter(n => n.kind === 'composite').length;
+  document.getElementById('stat-nw').textContent =
+    `non-witnesses: ${nOne} pink, ${nComp} green`;
+}
+
+// Index nodes by w
+const nodeMap = {};
+nodes.forEach(n => { nodeMap[n.w] = n; });
+
+
+// ── geometry pools ────────────────────────────────────────────────────────────
+
+const NODE_RADIUS = 0.07;
+const NW_RADIUS   = 0.045;  // non-witnesses smaller
+const nodeGeo = new THREE.SphereGeometry(NODE_RADIUS, 12, 8);
+const nwGeo   = new THREE.SphereGeometry(NW_RADIUS,   8, 6);
+
+const NW_COLOUR = {
+  one_prime:  new THREE.Color(0.95, 0.45, 0.65),   // pink
+  composite:  new THREE.Color(0.20, 0.75, 0.30),   // green
+};
+
+// Each witness node: a mesh
+const nodeMeshes = {};
+nodes.forEach(n => {
+  const mat = new THREE.MeshPhongMaterial({ color: dimColour(n.t) });
+  const mesh = new THREE.Mesh(nodeGeo, mat);
+  mesh.position.set(n.x, n.y, n.z);
+  mesh.visible = false;
+  mesh.userData = { ...n, isWitness: true };
+  scene.add(mesh);
+  nodeMeshes[n.w] = mesh;
+});
+
+// Non-witness nodes (static — shown all at once when data present)
+const nwMeshes = [];
+nonWitnesses.forEach(nw => {
+  const col = NW_COLOUR[nw.kind] || new THREE.Color(0.5, 0.5, 0.5);
+  const mat = new THREE.MeshPhongMaterial({
+    color: col.clone().multiplyScalar(1.4),
+    transparent: true, opacity: 0.55,
+  });
+  const mesh = new THREE.Mesh(nwGeo, mat);
+  mesh.position.set(nw.x, nw.y, nw.z);
+  mesh.visible = true;
+  mesh.userData = { ...nw, isWitness: false };
+  scene.add(mesh);
+  nwMeshes.push(mesh);
+});
+
+// Edge geometry: LineSegments for all edges
+const edgePositions = [];
+edges.forEach(e => {
+  const src = nodeMap[e.src];
+  const dst = nodeMap[e.dst];
+  edgePositions.push(src.x, src.y, src.z, dst.x, dst.y, dst.z);
+});
+const edgeGeo = new THREE.BufferGeometry();
+const edgePosArr = new Float32Array(edgePositions.length);
+edgePosArr.set(edgePositions);
+edgeGeo.setAttribute('position', new THREE.BufferAttribute(edgePosArr, 3));
+
+// We'll control per-edge visibility by swapping to NaN positions for hidden edges
+const edgePosBuf = edgeGeo.attributes.position;
+
+// Map edge index to edge object for show/hide
+const edgeVisibility = new Array(edges.length).fill(false);
+
+function setEdgeVisible(i, visible) {
+  if (edgeVisibility[i] === visible) return;
+  edgeVisibility[i] = visible;
+  const base = i * 6;
+  if (visible) {
+    const e = edges[i];
+    const s = nodeMap[e.src], d = nodeMap[e.dst];
+    edgePosArr[base]   = s.x; edgePosArr[base+1] = s.y; edgePosArr[base+2] = s.z;
+    edgePosArr[base+3] = d.x; edgePosArr[base+4] = d.y; edgePosArr[base+5] = d.z;
+  } else {
+    edgePosArr.fill(NaN, base, base + 6);
+  }
+  edgePosBuf.needsUpdate = true;
+}
+
+// Start all edges hidden (NaN)
+edgePosArr.fill(NaN);
+edgePosBuf.needsUpdate = true;
+
+const edgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 });
+const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+scene.add(edgeLines);
+
+// Build edge lookup: for each dst node, list of edge indices
+const edgesByDst = {};
+edges.forEach((e, i) => {
+  if (!edgesByDst[e.dst]) edgesByDst[e.dst] = [];
+  edgesByDst[e.dst].push(i);
+});
+
+// ── playback state ────────────────────────────────────────────────────────────
+
+let currentStep = 0;   // how many generations have been revealed
+const totalSteps = generations.length;
+let playing = false;
+let playInterval = null;
+const PLAY_MS = 120;   // ms per step during playback
+
+function revealUpTo(step) {
+  // Show nodes and edges for generations 0..step-1
+  for (let g = 0; g < step; g++) {
+    const gen = generations[g];
+    // Show v
+    const vm = nodeMeshes[gen.v];
+    if (vm) {
+      vm.visible = true;
+      vm.material.color.copy(dimColour(nodeMap[gen.v].t));
+    }
+    // Show children + their edges
+    gen.children.forEach(([u, w]) => {
+      const wm = nodeMeshes[w];
+      if (wm) wm.visible = true;
+      if (edgesByDst[w]) edgesByDst[w].forEach(i => setEdgeVisible(i, true));
+    });
+  }
+}
+
+function resetScene() {
+  nodes.forEach(n => { nodeMeshes[n.w].visible = false; });
+  edgePosArr.fill(NaN);
+  edgePosBuf.needsUpdate = true;
+  edgeVisibility.fill(false);
+  currentStep = 0;
+  updateUI();
+}
+
+function stepTo(s) {
+  s = Math.max(0, Math.min(totalSteps, s));
+  if (s < currentStep) {
+    resetScene();
+  }
+  revealUpTo(s);
+  currentStep = s;
+  updateUI();
+}
+
+function updateUI() {
+  const visible = nodes.filter(n => nodeMeshes[n.w].visible).length;
+  document.getElementById('stat-nodes').textContent = `|A| = ${visible}`;
+  document.getElementById('step-label').textContent = `step ${currentStep} / ${totalSteps}`;
+}
+
+// Start fully revealed
+stepTo(totalSteps);
+
+// ── playback controls ─────────────────────────────────────────────────────────
+
+function setPlaying(val) {
+  playing = val;
+  document.getElementById('btn-play').textContent = playing ? '⏸' : '▶';
+  if (playing) {
+    playInterval = setInterval(() => {
+      if (currentStep >= totalSteps) {
+        setPlaying(false);
+        return;
+      }
+      stepTo(currentStep + 1);
+    }, PLAY_MS);
+  } else {
+    clearInterval(playInterval);
+  }
+}
+
+document.getElementById('btn-play').addEventListener('click', () => setPlaying(!playing));
+document.getElementById('btn-next').addEventListener('click', () => { setPlaying(false); stepTo(currentStep + 1); });
+document.getElementById('btn-prev').addEventListener('click', () => { setPlaying(false); stepTo(currentStep - 1); });
+document.getElementById('btn-reset').addEventListener('click', () => { setPlaying(false); resetScene(); });
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+  if (e.code === 'ArrowRight') { setPlaying(false); stepTo(currentStep + 1); }
+  if (e.code === 'ArrowLeft')  { setPlaying(false); stepTo(currentStep - 1); }
+});
+
+// ── hover / tooltip ───────────────────────────────────────────────────────────
+
+const raycaster = new THREE.Raycaster();
+raycaster.params.Points = { threshold: 0.1 };
+const pointer = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+let hoveredMesh = null;
+
+window.addEventListener('pointermove', e => {
+  pointer.x =  (e.clientX / innerWidth)  * 2 - 1;
+  pointer.y = -(e.clientY / innerHeight) * 2 + 1;
+});
+
+function checkHover() {
+  raycaster.setFromCamera(pointer, camera);
+  const meshList = [
+    ...Object.values(nodeMeshes).filter(m => m.visible),
+    ...nwMeshes,
+  ];
+  const hits = raycaster.intersectObjects(meshList);
+
+  if (hits.length > 0) {
+    const mesh = hits[0].object;
+    if (mesh !== hoveredMesh) {
+      if (hoveredMesh) hoveredMesh.material.emissive.setHex(0x000000);
+      hoveredMesh = mesh;
+      hoveredMesh.material.emissive.setScalar(0.3);
+    }
+    const n = mesh.userData;
+    const prog = n.prog ? `${n.prog[0]} + ${n.prog[1]}` : 'seed';
+    const p1 = 6 * n.w - 1, p2 = 6 * n.w + 1;
+    tooltip.style.display = 'block';
+    if (n.isWitness) {
+      tooltip.innerHTML =
+        `w = ${n.w} &nbsp;|&nbsp; dequeue #${n.dequeue_idx}<br>` +
+        `primes: ${p1}, ${p2}<br>` +
+        `progenitor: ${prog}<br>` +
+        `δ<sub>uv</sub> rank = ${n.t.toFixed(3)}`;
+    } else {
+      const kindLabel = n.kind === 'one_prime' ? 'one prime (pink)' : 'both composite (green)';
+      tooltip.innerHTML =
+        `w = ${n.w} &nbsp;|&nbsp; non-witness<br>` +
+        `6w±1: ${p1}, ${p2}<br>` +
+        `first pair: ${prog}<br>` +
+        `kind: ${kindLabel}`;
+    }
+  } else {
+    if (hoveredMesh) hoveredMesh.material.emissive.setHex(0x000000);
+    hoveredMesh = null;
+    tooltip.style.display = 'none';
+  }
+}
+
+// ── render loop ───────────────────────────────────────────────────────────────
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  checkHover();
+  composer.render();
+}
+animate();
+</script>
+</body>
+</html>

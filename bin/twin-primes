@@ -1,0 +1,458 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+die() {
+    echo "fatal: $*" >&2
+    exit ${DIE_RC:-1}
+}
+
+dispatch() {
+    local cmd="$1"
+    shift
+    "_$cmd" "$@"
+}
+
+
+_get() {
+    _now() {
+        date -u "+%Y%m%dT%H%M%SZ" 
+    }
+
+    _agents-dir() {
+        echo "$(cd "$(dirname "$0")/.." && pwd)/agents"
+    }
+
+    dispatch "$@"
+}
+
+_ingest() {
+
+    _agent() {
+        local agent="$1"
+        local timestamp=$(_get now)
+        local file="$(_get agents-dir)/${agent}/${timestamp}.md"
+        pbpaste > "$file"
+        echo "$file"
+        # claude --print /ingest-agent "$agent" "$file"
+    }
+
+    _gemini() {
+        _agent gemini
+    }
+
+    _chatgpt() {
+        _agent chatgpt
+    }
+
+    _aristotle() {
+
+        DOWNLOADS=${DOWNLOADS:-~/Downloads}
+        AGENT_DIR="$(_get agents-dir)/aristotle"
+
+        # Find the most recently modified aristotle tarball in Downloads
+        latest=$(ls -t "$DOWNLOADS"/*-aristotle.tar.gz 2>/dev/null | head -1)
+
+        if [[ -z "$latest" ]]; then
+            echo "ingest-aristotle: no *-aristotle.tar.gz found in $DOWNLOADS" >&2
+            exit 1
+        fi
+
+        # Derive timestamp from file modification time in ISO8601 format
+        timestamp=$(stat -f "%Sm" -t "%Y%m%dT%H%M%SZ" "$latest")
+
+        dest="$AGENT_DIR/$timestamp"
+
+        if [[ -d "$dest" ]]; then
+            echo "ingest-aristotle: destination already exists: $dest" >&2
+            exit 1
+        fi
+
+        mkdir -p "$dest"
+
+        # Extract, stripping the single top-level directory
+        tar -xzf "$latest" --strip-components=1 -C "$dest"
+
+        echo "$dest"
+        # claude --print /ingest-agent aristotle "$dest"
+    }
+
+    _tweet() {
+        local root
+        root="$(cd "$(dirname "$0")/.." && pwd)"
+        local dest_dir="${root}/agents/twitter"
+        local desktop="${DESKTOP:-${HOME}/Desktop}"
+
+        mkdir -p "$dest_dir"
+
+        # Find the most recently modified screenshot on the Desktop
+        # Use Python to handle the narrow no-break space macOS puts before AM/PM
+        local latest
+        latest=$(python3 - <<'PYEOF'
+import os, glob
+
+desktop = os.path.expanduser(os.environ.get("DESKTOP", os.path.join(os.path.expanduser("~"), "Desktop")))
+pngs = glob.glob(os.path.join(desktop, "Screenshot *.png"))
+if not pngs:
+    raise SystemExit("ingest tweet: no Screenshot *.png found on Desktop")
+latest = max(pngs, key=os.path.getmtime)
+print(latest)
+PYEOF
+)
+        if [[ -z "$latest" ]]; then
+            echo "ingest tweet: no screenshot found" >&2
+            exit 1
+        fi
+
+        # Build destination filename: lowercase, spaces→hyphens, strip narrow nbsp
+        local basename
+        basename=$(python3 -c "
+import os, unicodedata
+name = os.path.basename('$latest')
+name = unicodedata.normalize('NFKD', name)
+name = name.lower().replace(' ', '-')
+print(name)
+")
+        local dest="${dest_dir}/${basename}"
+
+        if [[ -e "$dest" ]]; then
+            echo "ingest tweet: destination already exists: $dest" >&2
+            exit 1
+        fi
+
+        mv "$latest" "$dest"
+        echo "$dest"
+        # claude --print /ingest-agent twitter "$dest"
+    }
+
+    dispatch "$@"
+
+}
+
+_send() {
+
+    _aristotle() {
+        local root
+        root="$(cd "$(dirname "$0")/.." && pwd)"
+        local paper_dir="${1:-}"
+        [[ -n "$paper_dir" ]] || die "usage: send aristotle <paper-dir>"
+
+        # Resolve to absolute path
+        [[ "$paper_dir" = /* ]] || paper_dir="${root}/${paper_dir}"
+        [[ -d "$paper_dir" ]] || die "not a directory: $paper_dir"
+
+        local paper_name
+        paper_name="$(basename "$paper_dir")"
+        local tgzname="${paper_name}-aristotle.tar.gz"
+        local dest="${DOWNLOADS:-${HOME}/Downloads}/${tgzname}"
+
+        # Build tar exclude args from .aristotleignore if present
+        local ignore_file="${paper_dir}/.aristotleignore"
+        local exclude_args=()
+        if [[ -f "$ignore_file" ]]; then
+            while IFS= read -r pattern || [[ -n "$pattern" ]]; do
+                # Skip blank lines and comments
+                [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+                exclude_args+=(--exclude="${paper_name}/${pattern}")
+            done < "$ignore_file"
+        fi
+
+        # Pack: single top-level directory named after the paper
+        tar -czf "$dest" \
+            "${exclude_args[@]}" \
+            -C "$(dirname "$paper_dir")" \
+            "$paper_name"
+
+        echo "$dest"
+    }
+
+    dispatch "$@"
+}
+
+_export() {
+
+    _confidential() {
+        local root="$(cd "$(dirname "$0")/.." && pwd)"
+        local ts=$(_get now)
+        local prefix="wdt-confidential-${ts}"
+        local bundle="/tmp/${prefix}"
+        local tgzname="${prefix}.tgz"
+
+        mkdir -p "$root/dist"
+        rm -rf "$bundle" && mkdir -p "$bundle/images" "$bundle/pdf" "$bundle/dubner-ball"
+
+        # Build all PDFs
+        task -d "$root" pdfs
+
+        # Stage PDFs into pdf/
+        cp "$root/papers/bridging-conjecture/wdt-bridging-conjecture.pdf"  "$bundle/pdf/"
+        cp "$root/papers/twin-prime-machine/wdt-twin-prime-machine.pdf"    "$bundle/pdf/"
+        cp "$root/papers/dubners-ball/wdt-dubners-ball.pdf"                "$bundle/pdf/"
+        cp "$root/papers/heuristics/wdt-heuristics.pdf"                    "$bundle/pdf/"
+
+        # Stage image
+        cp "$root/papers/images/dubner-ball.png"                           "$bundle/images/dubner-ball.png"
+
+        # Stage 3D interactive viewer
+        cp "$root/3d/dubner-ball/index.html"                               "$bundle/dubner-ball/index.html"
+        cp "$root/3d/dubner-ball/data.json"                                "$bundle/dubner-ball/data.json"
+
+        # Generate README — links are already relative
+        cp "$root/index.confidential.md" "$bundle/README.md"
+
+        # Viewer launch script (lives inside dubner-ball/, serves from there)
+        cat > "$bundle/dubner-ball/serve.sh" <<'SERVE'
+#!/bin/bash
+PORT=8765
+cd "$(dirname "${BASH_SOURCE[0]}")"
+echo "Serving on http://localhost:${PORT}/"
+python3 -m http.server $PORT &
+SERVER_PID=$!
+sleep 1
+if [ "$(uname)" = "Darwin" ]; then
+    open "http://localhost:${PORT}/"
+fi
+wait $SERVER_PID
+SERVE
+        chmod +x "$bundle/dubner-ball/serve.sh"
+
+        # SHA1 manifest
+        (cd "$bundle" && find . -type f | sort | xargs shasum -a 1) > "$bundle/MANIFEST.sha1"
+
+        # Pack and clean up
+        tar -czf "$root/dist/$tgzname" -C "/tmp" "$prefix"
+        rm -rf "$bundle"
+        echo "$root/dist/$tgzname"
+    }
+
+    _s3() {
+        # TODO: 'export s3' has been broken for some time — glob expansion of
+        # papers/*/wdt-*.pdf was not being resolved before passing to aws s3 sync.
+        # Fixed in _publish_view (compgen -G expansion). Needs end-to-end test.
+        echo "warning: 'export s3' is deprecated — use 'publish view confidential'" >&2
+        _publish_view confidential
+    }
+
+    dispatch "$@"
+}
+
+_publish_view() {
+    local root="$(cd "$(dirname "$0")/.." && pwd)"
+    local view_name="${1:-}"
+    [[ -n "$view_name" ]] || die "usage: publish view <name>"
+
+    local view="${root}/etc/views/${view_name}.yml"
+    [[ -f "$view" ]] || die "view definition not found: $view"
+
+    local ts=$(_get now)
+    local view_json
+    view_json=$(y2j < "$view")
+    local s3_base aws_profile
+    s3_base=$(jq -r '.s3_base // "s3://jonseymour/twin-primes"' <<< "$view_json")
+    aws_profile=$(jq -r '.aws_profile // empty' <<< "$view_json")
+    [[ -n "$aws_profile" ]] && export AWS_PROFILE="$aws_profile"
+    local S3_DEST="${s3_base}/${ts}/"
+
+    # Require a pre-built bundle in dist/
+    local bundle
+    bundle=$(ls -t "$root/dist/"*.tgz 2>/dev/null | head -1)
+    if [[ -z "$bundle" ]]; then
+        die "no bundle found in $root/dist/ — run 'bin/twin-primes export confidential' first"
+    fi
+
+    # Build all PDFs
+    task -d "$root" pdfs
+
+    # Read view definition
+    local index includes
+    index=$(jq -r '.index' <<< "$view_json")
+    mapfile -t includes < <(jq -r '.include[]' <<< "$view_json")
+
+    # Publish index as README.md
+    aws s3 cp --acl public-read \
+        "${root}/${index}" \
+        "${S3_DEST}README.md"
+
+    # Sync each included pattern
+    for pattern in "${includes[@]}"; do
+        # Trailing slash → directory sync; otherwise → expand glob and sync each matched file
+        if [[ "$pattern" == */ ]]; then
+            aws s3 sync --acl public-read \
+                "${root}/${pattern}" "${S3_DEST}${pattern}"
+        else
+            # Expand the glob against the filesystem
+            local matched
+            mapfile -t matched < <(cd "$root" && compgen -G "$pattern" 2>/dev/null)
+            if [[ ${#matched[@]} -eq 0 ]]; then
+                echo "warning: no files matched pattern '$pattern'" >&2
+                continue
+            fi
+            for file in "${matched[@]}"; do
+                local dir
+                dir="$(dirname "$file")"
+                aws s3 cp --acl public-read \
+                    "${root}/${file}" "${S3_DEST}${file}"
+            done
+        fi
+    done
+
+    echo "$S3_DEST"
+}
+
+_publish() {
+    _view() {
+        _publish_view "$@"
+    }
+    dispatch "$@"
+}
+
+_dist() {
+
+    _unpack() {
+        local root="$(cd "$(dirname "$0")/.." && pwd)"
+        local bundle
+        bundle=$(ls -t "$root/dist/"*.tgz 2>/dev/null | head -1)
+        [[ -n "$bundle" ]] || die "no bundle found in $root/dist/ — run 'bin/twin-primes export confidential' first"
+        local prefix
+        prefix=$(basename "$bundle" .tgz)
+        rm -rf "/tmp/$prefix"
+        tar -xzf "$bundle" -C /tmp
+        code "/tmp/$prefix"
+        echo "/tmp/$prefix"
+    }
+
+    _next-s3() {
+        local root="$(cd "$(dirname "$0")/.." && pwd)"
+        local S3_BUNDLE_BASE="https://jonseymour.s3.amazonaws.com/twin-primes"
+        local bundle
+        bundle=$(ls -t "$root/dist/"*.tgz 2>/dev/null | head -1)
+        [[ -n "$bundle" ]] || die "no bundle found in $root/dist/ — run 'bin/twin-primes export confidential' first"
+        echo "${S3_BUNDLE_BASE}/$(basename "$bundle")"
+    }
+
+    dispatch "$@"
+}
+
+_dataset() {
+    local root
+    root="$(cd "$(dirname "$0")/.." && pwd)"
+
+    _generate() {
+        local name="$1"
+        shift
+        PYTHONPATH="${root}/lib${PYTHONPATH+:${PYTHONPATH}}" \
+            python -m "twin_primes.datasets.${name//-/_}" "$@"
+    }
+
+    dispatch "$@"
+}
+
+_public() {
+    local root="$(cd "$(dirname "$0")/.." && pwd)"
+
+    _sync() {
+        local view="${root}/etc/views/public.yml"
+        [[ -f "$view" ]] || die "view definition not found: $view"
+
+        local view_json
+        view_json=$(y2j < "$view")
+
+        local public_repo
+        public_repo=$(jq -r '.public_repo // "../twin-primes-public"' <<< "$view_json")
+        # Resolve relative to root
+        [[ "$public_repo" = /* ]] || public_repo="$(cd "${root}/${public_repo}" && pwd)"
+        [[ -d "$public_repo/.git" ]] || die "public repo not found or not a git repo: $public_repo"
+
+        local index
+        index=$(jq -r '.index // "README.md"' <<< "$view_json")
+        mapfile -t includes < <(jq -r '.include[]' <<< "$view_json")
+
+        # --- Step 1: Anchor public/master into research/master ---
+        # Merge current public/master tip into research/master (history-only).
+        # This ensures public/master is always a reachable ancestor of research/master
+        # before we advance the public tip.
+        local public_tip
+        public_tip=$(git -C "$public_repo" rev-parse HEAD)
+        local research_branch
+        research_branch=$(git -C "$root" rev-parse --abbrev-ref HEAD)
+        [[ "$research_branch" == "research/master" ]] || \
+            die "research repo must be on research/master (currently: $research_branch)"
+
+        # Only merge if public tip is not already an ancestor of research/master
+        if ! git -C "$root" merge-base --is-ancestor "$public_tip" HEAD 2>/dev/null; then
+            echo "Merging public/master ($public_tip) into research/master..."
+            git -C "$root" merge --no-ff --no-edit \
+                -m "research: merge public/master into research/master (history anchor)
+
+Ensures public/master is a reachable ancestor of research/master
+before advancing the public branch tip.
+
+Co-Authored-By: Claude <noreply@anthropic.com>" \
+                "$public_tip"
+        else
+            echo "public/master already ancestor of research/master — no merge needed."
+        fi
+
+        local src_hash
+        src_hash=$(git -C "$root" rev-parse --short HEAD)
+
+        echo "Syncing research/master ($src_hash) -> $public_repo"
+
+        # --- Step 2: Populate public repo from manifest ---
+        # Clear public repo (preserve .git/)
+        find "$public_repo" -mindepth 1 -maxdepth 1 \
+            ! -name '.git' \
+            -exec rm -rf {} +
+
+        # Copy each included pattern from research repo
+        for pattern in "${includes[@]}"; do
+            if [[ "$pattern" == */ ]]; then
+                # Directory: strip trailing slash to get the dir name,
+                # rsync without trailing slash on source preserves the
+                # directory name at the destination.
+                local dir="${pattern%/}"
+                local src="${root}/${dir}"
+                if [[ -d "$src" ]]; then
+                    mkdir -p "${public_repo}/$(dirname "$dir")"
+                    rsync -a \
+                        --exclude='__pycache__' \
+                        --exclude='*.pyc' \
+                        "${src}" "${public_repo}/$(dirname "$dir")/"
+                else
+                    echo "warning: directory not found: $src" >&2
+                fi
+            else
+                # Glob: expand and copy each file
+                local matched
+                mapfile -t matched < <(cd "$root" && compgen -G "$pattern" 2>/dev/null)
+                if [[ ${#matched[@]} -eq 0 ]]; then
+                    echo "warning: no files matched pattern '$pattern'" >&2
+                    continue
+                fi
+                for file in "${matched[@]}"; do
+                    local dest_dir
+                    dest_dir="${public_repo}/$(dirname "$file")"
+                    mkdir -p "$dest_dir"
+                    cp "${root}/${file}" "${public_repo}/${file}"
+                done
+            fi
+        done
+
+        # --- Step 3: Commit in public repo ---
+        git -C "$public_repo" add -A
+        if git -C "$public_repo" diff --cached --quiet; then
+            echo "Nothing to commit — public repo already up to date."
+        else
+            git -C "$public_repo" commit -m "public: sync from research/master ${src_hash}
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+            echo ""
+            echo "Done. public/master is a strict subset of research/master."
+            echo "Review then push from: $public_repo"
+            echo "  cd $public_repo && git push"
+        fi
+    }
+
+    dispatch "$@"
+}
+
+dispatch "$@"

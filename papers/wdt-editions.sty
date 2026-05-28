@@ -1,0 +1,111 @@
+% wdt-editions.sty — Edition and stream system for Wild Duck Theories papers
+%
+% EDITIONS
+% --------
+% An edition is a named composition of streams at a declared granularity.
+% Set \currentedition before \usepackage{wdt-editions} or on the command line:
+%   pdflatex '\def\currentedition{academic-strict}\input{editions/wdt-muxing-academic-strict}'
+%
+% Standard editions:
+%   working          — formal + working notes, chapter-level (author-facing)
+%   academic-strict  — formal + lean appendix, part-level
+%   academic-liberal — formal + metaphorical, chapter-level
+%   rich             — metaphorical + formal + lean, chapter-level
+%   plain            — plain + formal, chapter-level
+%   lean             — lean only, part-level
+%   literate         — metaphorical + lean, theorem-level
+%
+% STREAMS
+% -------
+% A stream is an atomic content layer. Tag content with:
+%   \streambegin{name} ... \streamend{name}
+%
+% Standard streams:
+%   formal       — theorems, lemmas, proofs, definitions
+%   working      — author remarks, proof sketches, editorial notes
+%   lean         — Lean 4 source blocks
+%   metaphorical — literary/allegorical prose (GEB register)
+%   plain        — plain English glosses, lay explanations
+%
+% \currentstream controls which stream is active. Content tagged with any
+% other stream is silently suppressed. Set \currentstream in driver documents.
+% If \currentstream is unset, defaults to 'formal' (all formal content shown).
+%
+% GRANULARITY
+% -----------
+% Granularity is implemented by the driver document, not this package.
+% Part-level: driver sets \currentstream once per pass over the full source.
+% Chapter-level: driver sets \currentstream before each \input{chapter}.
+% Theorem-level: stream tags are placed around individual theorem blocks.
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{wdt-editions}[2026/05/27 WDT Edition and Stream System]
+
+\RequirePackage{xstring}
+\RequirePackage{draftwatermark}
+
+% ---- Edition ----
+
+% Default edition
+\providecommand{\currentedition}{working}
+
+% \ifedition{edition}{content}
+%   Include content only if \currentedition matches edition.
+\newcommand{\ifedition}[2]{%
+  \edef\wdt@ename{#1}%
+  \edef\wdt@ecur{\currentedition}%
+  \ifx\wdt@ename\wdt@ecur #2\fi%
+}
+
+% \foreditions{ed1,ed2,...}{content}
+%   Include content if \currentedition is any of the listed editions.
+\newcommand{\foreditions}[2]{%
+  \IfSubStr{,#1,}{,\currentedition,}{#2}{}%
+}
+
+% ---- Stream ----
+
+% Default stream — if unset, show formal content
+\providecommand{\currentstream}{formal}
+
+% \streambegin{name} ... \streamend{name}
+%   Include the enclosed content only when \currentstream matches name.
+%   When suppressed, content is discarded via a void vbox group.
+\newcommand{\streambegin}[1]{%
+  \edef\wdt@sname{#1}%
+  \edef\wdt@scur{\currentstream}%
+  \ifx\wdt@sname\wdt@scur
+    % stream active — do nothing, content flows normally
+  \else
+    % stream inactive — open a void group to discard content
+    \setbox0=\vbox\bgroup\ignorespaces
+  \fi
+}
+
+\newcommand{\streamend}[1]{%
+  \edef\wdt@sname{#1}%
+  \edef\wdt@scur{\currentstream}%
+  \ifx\wdt@sname\wdt@scur
+    % stream was active — do nothing
+  \else
+    % close the void group
+    \egroup
+  \fi
+}
+
+% ---- Watermark (edition-driven) ----
+
+\SetWatermarkScale{3}
+\SetWatermarkColor[gray]{0.88}
+
+\ifedition{working}{\SetWatermarkText{WORKING}}
+\ifedition{academic-strict}{\SetWatermarkText{DRAFT}}
+\ifedition{academic-liberal}{\SetWatermarkText{DRAFT}}
+\ifedition{rich}{\SetWatermarkText{DRAFT}}
+\ifedition{plain}{\SetWatermarkText{DRAFT}}
+\ifedition{lean}{\SetWatermarkText{}}
+\ifedition{literate}{\SetWatermarkText{DRAFT}}
+% Legacy single-word editions (Phase 1 compatibility)
+\ifedition{academic}{\SetWatermarkText{DRAFT}}
+\ifedition{metaphorical}{\SetWatermarkText{DRAFT}}
+\ifedition{archived}{\SetWatermarkText{ARCHIVED}}
