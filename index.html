@@ -156,26 +156,22 @@
       border-radius: 4px;
       cursor: pointer;
       letter-spacing: 0.04em;
-      transition: opacity 0.4s, background 0.2s, color 0.2s;
+      transition: opacity 0.6s, background 0.2s, color 0.2s;
       backdrop-filter: blur(4px);
       -webkit-backdrop-filter: blur(4px);
       box-shadow: 0 0 12px rgba(122,184,245,0.2);
-      opacity: 0.75;
+      opacity: 1;
     }
 
     #btn-twirl:hover {
-      opacity: 1;
+      opacity: 1 !important;
       background: rgba(122,184,245,0.18);
       color: #fff;
       box-shadow: 0 0 20px rgba(122,184,245,0.4);
     }
 
-    #hero:hover #btn-twirl {
+    #btn-twirl.faded {
       opacity: 0.15;
-    }
-
-    #hero:hover #btn-twirl:hover {
-      opacity: 1;
     }
   </style>
 </head>
@@ -184,7 +180,6 @@
 <nav id="nav">
   <span class="site-title">Twin Primes</span>
   <a href="#papers">Papers</a>
-  <a href="3d/dubner-ball/index.html">3D Viewer</a>
   <a href="https://github.com/wildducktheories/twin-primes">GitHub</a>
 </nav>
 
@@ -199,8 +194,39 @@
     <h1>Twin Primes</h1>
     <p>An exploration of the Twin Prime Conjecture via the additive structure of twin prime witnesses &mdash; Wild Duck Theories Pty Limited</p>
   </div>
-  <button id="btn-twirl" onclick="document.getElementById('dubner-iframe').contentWindow.postMessage('twirl','*')">twirl!</button>
+  <button id="btn-twirl">twirl!</button>
 </div>
+
+<script>
+  (function () {
+    var btn = document.getElementById('btn-twirl');
+    var hero = document.getElementById('hero');
+    var fadeTimer = null;
+
+    function scheduleFade() {
+      clearTimeout(fadeTimer);
+      fadeTimer = setTimeout(function () {
+        btn.classList.add('faded');
+      }, 3000);
+    }
+
+    function revive() {
+      btn.classList.remove('faded');
+      scheduleFade();
+    }
+
+    btn.addEventListener('click', function () {
+      document.getElementById('dubner-iframe').contentWindow.postMessage('twirl', '*');
+      revive();
+    });
+
+    hero.addEventListener('mousemove', revive);
+    hero.addEventListener('touchstart', revive, { passive: true });
+
+    /* start the initial fade countdown */
+    scheduleFade();
+  })();
+</script>
 
 <div id="papers">
 
