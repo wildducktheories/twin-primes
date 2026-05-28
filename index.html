@@ -5,96 +5,175 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Twin Primes — Wild Duck Theories</title>
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
       font-family: Georgia, serif;
-      max-width: 800px;
-      margin: 3em auto;
-      padding: 0 1.5em;
+      background: #0a0a12;
+      color: #ccc;
       line-height: 1.6;
-      color: #222;
-      background: #fff;
     }
-    h1 { font-size: 1.8em; margin-bottom: 0.2em; }
-    h2 { font-size: 1.2em; margin-top: 2em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
-    .subtitle { color: #555; font-style: italic; margin-top: 0; }
+
+    /* ── hero ── */
+    #hero {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      min-height: 400px;
+    }
+
+    #hero iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    #hero-caption {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      padding: 1.2em 1.8em;
+      background: linear-gradient(to bottom, rgba(10,10,18,0.82) 60%, transparent);
+      pointer-events: none;
+    }
+
+    #hero-caption h1 {
+      font-size: 1.6em;
+      color: #fff;
+      font-weight: normal;
+      letter-spacing: 0.02em;
+    }
+
+    #hero-caption p {
+      font-size: 0.9em;
+      color: #aaa;
+      font-style: italic;
+      margin-top: 0.2em;
+    }
+
+    /* ── content below the fold ── */
+    #content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2.5em 1.5em 3em;
+    }
+
+    h2 {
+      font-size: 1.1em;
+      font-weight: normal;
+      color: #eee;
+      border-bottom: 1px solid #333;
+      padding-bottom: 0.3em;
+      margin-top: 2.2em;
+    }
+
     .paper { margin: 1.2em 0; }
-    .paper a { font-weight: bold; text-decoration: none; color: #1a0dab; }
+
+    .paper a {
+      font-weight: bold;
+      text-decoration: none;
+      color: #7ab8f5;
+    }
+
     .paper a:hover { text-decoration: underline; }
-    .paper .desc { color: #444; margin: 0.2em 0 0 0; font-size: 0.95em; }
-    .links { margin-top: 2em; font-size: 0.9em; color: #555; }
-    .links a { color: #1a0dab; }
-    footer { margin-top: 3em; font-size: 0.85em; color: #888; border-top: 1px solid #eee; padding-top: 1em; }
+
+    .paper .desc {
+      color: #999;
+      margin: 0.25em 0 0 0;
+      font-size: 0.92em;
+    }
+
+    .links {
+      margin-top: 2em;
+      font-size: 0.88em;
+      color: #666;
+    }
+
+    .links a { color: #7ab8f5; }
+
+    footer {
+      margin-top: 2.5em;
+      font-size: 0.82em;
+      color: #555;
+      border-top: 1px solid #1e1e2a;
+      padding-top: 1em;
+    }
+
+    footer a { color: #7ab8f5; }
   </style>
 </head>
 <body>
 
-<h1>Twin Primes</h1>
-<p class="subtitle">An exploration of the Twin Prime Conjecture via the additive structure of twin prime witnesses &mdash; Wild Duck Theories Pty Limited</p>
-
-<h2>Primary Paper</h2>
-
-<div class="paper">
-  <a href="papers/structural-conjecture/wdt-structural-conjecture.pdf">A Structural Conjecture for the Infinitude of Twin Primes</a>
-  <p class="desc">
-    The central thesis: PNT &rArr; (WDC &and; BC) &rArr; TPC. Introduces the Bridging Conjecture (BC) and
-    Witness Decomposition Conjecture (WDC), proves BC &rArr; TPC unconditionally, and proposes
-    that the Prime Number Theorem alone forces the additive closure of the set of twin prime witnesses
-    &mdash; bypassing the parity obstruction that limits sieve theory.
-    Includes the Bridging Machine, the Gap Machine, scale invariance theorems, and
-    Lean&nbsp;4 machine-verified proofs of the core implication chain.
-  </p>
+<div id="hero">
+  <iframe src="3d/dubner-ball/index.html"
+          title="Dubner's Ball — interactive 3D visualisation of twin prime witnesses"
+          loading="lazy"
+          allowfullscreen>
+  </iframe>
+  <div id="hero-caption">
+    <h1>Twin Primes</h1>
+    <p>An exploration of the Twin Prime Conjecture via the additive structure of twin prime witnesses &mdash; Wild Duck Theories Pty Limited</p>
+  </div>
 </div>
 
-<h2>Earlier Papers</h2>
+<div id="content">
 
-<div class="paper">
-  <a href="papers/bridging-conjecture/wdt-bridging-conjecture.pdf">Bridging the Gap: Additive Structure in the Twin Prime Cofactors</a>
-  <p class="desc">
-    Introduces the Bridging Conjecture and establishes its equivalence to TPC under
-    Dubner&rsquo;s Middle Number Conjecture. Derives a conditional lower bound
-    &pi;<sub>2</sub>(x) &gg; log x from additive structure alone.
-  </p>
+  <h2>Primary Paper</h2>
+
+  <div class="paper">
+    <a href="papers/structural-conjecture/wdt-structural-conjecture.pdf">A Structural Conjecture for the Infinitude of Twin Primes</a>
+    <p class="desc">
+      The central thesis: PNT &rArr; (WDC &and; BC) &rArr; TPC. Introduces the Bridging Conjecture (BC) and
+      Witness Decomposition Conjecture (WDC), proves BC &rArr; TPC unconditionally, and proposes
+      that the Prime Number Theorem alone forces the additive closure of the set of twin prime witnesses
+      &mdash; bypassing the parity obstruction that limits sieve theory.
+      Includes the Bridging Machine, the Gap Machine, scale invariance theorems, and
+      Lean&nbsp;4 machine-verified proofs of the core implication chain.
+    </p>
+  </div>
+
+  <h2>Earlier Papers</h2>
+
+  <div class="paper">
+    <a href="papers/bridging-conjecture/wdt-bridging-conjecture.pdf">Bridging the Gap: Additive Structure in the Twin Prime Cofactors</a>
+    <p class="desc">
+      Introduces the Bridging Conjecture and establishes its equivalence to TPC under
+      Dubner&rsquo;s Middle Number Conjecture. Derives a conditional lower bound
+      &pi;<sub>2</sub>(x) &gg; log x from additive structure alone.
+    </p>
+  </div>
+
+  <div class="paper">
+    <a href="papers/dubners-ball/wdt-dubners-ball.pdf">The Mathematics of Dubner&rsquo;s Ball</a>
+    <p class="desc">
+      The 3D visualisation of the witness set and its progenitor structure.
+      Each node is a twin prime witness; each filament connects a witness to its
+      decomposition pair. The ball grows to infinity if and only if BC holds.
+    </p>
+  </div>
+
+  <div class="paper">
+    <a href="papers/heuristics/wdt-heuristics.pdf">Heuristic Evidence for the Bridging Conjecture</a>
+    <p class="desc">
+      Decomposition gap analysis, cluster structure, and probabilistic estimates
+      for simultaneous bridging failure. Empirical and analytic evidence that BC
+      is overwhelmingly likely to be true.
+    </p>
+  </div>
+
+  <div class="links">
+    <strong style="color:#888">External references:</strong>
+    <a href="https://oeis.org/A002822">OEIS A002822</a> (twin prime cofactors) &nbsp;&middot;&nbsp;
+    <a href="https://arxiv.org/abs/1106.6050">Balestrieri 2011</a> (arXiv:1106.6050) &nbsp;&middot;&nbsp;
+    <a href="https://github.com/wildducktheories/twin-primes">GitHub</a>
+  </div>
+
+  <footer>
+    Jon Seymour &mdash; Wild Duck Theories Pty Limited, Sydney, Australia &mdash; 2026<br>
+    <a href="mailto:jon@wildducktheories.com">jon@wildducktheories.com</a>
+  </footer>
+
 </div>
-
-<div class="paper">
-  <a href="papers/dubners-ball/wdt-dubners-ball.pdf">The Mathematics of Dubner&rsquo;s Ball</a>
-  <p class="desc">
-    The 3D visualisation of the witness set and its progenitor structure.
-    Each node is a twin prime witness; each filament connects a witness to its
-    decomposition pair. The ball grows to infinity if and only if BC holds.
-  </p>
-</div>
-
-<div class="paper">
-  <a href="papers/heuristics/wdt-heuristics.pdf">Heuristic Evidence for the Bridging Conjecture</a>
-  <p class="desc">
-    Decomposition gap analysis, cluster structure, and probabilistic estimates
-    for simultaneous bridging failure. Empirical and analytic evidence that BC
-    is overwhelmingly likely to be true.
-  </p>
-</div>
-
-<h2>Interactive</h2>
-
-<div class="paper">
-  <a href="3d/dubner-ball/index.html">Dubner&rsquo;s Ball &mdash; 3D Viewer</a>
-  <p class="desc">
-    Interactive three-dimensional visualisation of the twin prime witness progenitor tree.
-    Rotate, zoom, and explore the self-similar structure of the witness set.
-  </p>
-</div>
-
-<div class="links">
-  <strong>External references:</strong>
-  <a href="https://oeis.org/A002822">OEIS A002822</a> (twin prime cofactors) &nbsp;&middot;&nbsp;
-  <a href="https://arxiv.org/abs/1106.6050">Balestrieri 2011</a> (arXiv:1106.6050) &nbsp;&middot;&nbsp;
-  <a href="https://github.com/wildducktheories/twin-primes">GitHub</a>
-</div>
-
-<footer>
-  Jon Seymour &mdash; Wild Duck Theories Pty Limited, Sydney, Australia &mdash; 2026<br>
-  <a href="mailto:jon@wildducktheories.com">jon@wildducktheories.com</a>
-</footer>
 
 </body>
 </html>
