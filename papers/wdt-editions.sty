@@ -1,56 +1,65 @@
 % wdt-editions.sty — Edition and stream system for Wild Duck Theories papers
 %
-% EDITIONS
+% CONCEPTS
 % --------
-% An edition is a named composition of streams at a declared granularity.
-% Set \currentedition before \usepackage{wdt-editions} or on the command line:
-%   pdflatex '\def\currentedition{academic-strict}\input{editions/wdt-muxing-academic-strict}'
+% Streams are an INPUT concept: they tag content at authoring time.
+%   \streambegin{lean} ... \streamend{lean}
+%   \streambegin{metaphorical} ... \streamend{metaphorical}
 %
-% Standard editions:
-%   working          — formal + working notes, chapter-level (author-facing)
-%   academic-strict  — formal + lean appendix, part-level
-%   academic-liberal — formal + metaphorical, chapter-level
-%   rich             — metaphorical + formal + lean, chapter-level
-%   plain            — plain + formal, chapter-level
-%   lean             — lean only, part-level
-%   literate         — metaphorical + lean, theorem-level
+% Editions are an OUTPUT concept: they declare which streams are enabled.
+%   \enablestream{academic}
+%   \enablestream{lean}
+%   (metaphorical not enabled -> suppressed)
 %
-% STREAMS
-% -------
-% A stream is an atomic content layer. Tag content with:
-%   \streambegin{name} ... \streamend{name}
+% Untagged content always flows through regardless of stream settings.
+% Tagged content is shown only when its stream is enabled.
 %
-% Standard streams:
-%   formal       — theorems, lemmas, proofs, definitions
-%   working      — author remarks, proof sketches, editorial notes
-%   lean         — Lean 4 source blocks
-%   metaphorical — literary/allegorical prose (GEB register)
-%   plain        — plain English glosses, lay explanations
+% STANDARD STREAMS
+% ----------------
+%   academic       — theorems, lemmas, proofs, definitions (always enabled in
+%                  all meaningful editions; untagged content is implicitly academic)
+%   lean         — Lean 4 source blocks and certificates
+%   metaphorical — literary/allegorical prose (GEB/Thompson/Pirsig register):
+%                  epigraphs, footnotes with voice, the Interlude, author remarks
+%   working      — author-facing proof sketches, editorial notes, open questions
+%   plain        — plain English glosses for general readers
 %
-% \currentstream controls which stream is active. Content tagged with any
-% other stream is silently suppressed. Set \currentstream in driver documents.
-% If \currentstream is unset, defaults to 'formal' (all formal content shown).
+% STANDARD EDITIONS (defined via \enablestream calls in driver documents)
+% -----------------------------------------------------------------------
+%   source       — all streams enabled (academic + lean + metaphorical + working)
+%   literate     — academic + lean (source minus working notes)
+%   academic     — academic only (no lean, no metaphorical, no working)
+%   rich         — academic + metaphorical (no lean, no working)
+%
+% See papers/EDITIONS.md for full edition maintenance rules.
+%
+% USAGE IN DRIVER DOCUMENTS
+% -------------------------
+%   \def\currentedition{source}
+%   \enablestream{academic}
+%   \enablestream{lean}
+%   \enablestream{metaphorical}
+%   \enablestream{working}
+%   \usepackage{../wdt-editions}
+%   \input{wdt-structural-conjecture}
 %
 % GRANULARITY
 % -----------
-% Granularity is implemented by the driver document, not this package.
-% Part-level: driver sets \currentstream once per pass over the full source.
-% Chapter-level: driver sets \currentstream before each \input{chapter}.
-% Theorem-level: stream tags are placed around individual theorem blocks.
+% Streams can be tagged at any granularity — around whole sections, individual
+% theorem blocks, or single sentences. The driver document does not need to
+% know the granularity; it just enables the streams it wants.
 
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{wdt-editions}[2026/05/27 WDT Edition and Stream System]
+\ProvidesPackage{wdt-editions}[2026/05/29 WDT Edition and Stream System v2]
 
 \RequirePackage{xstring}
 \RequirePackage{draftwatermark}
 
 % ---- Edition ----
 
-% Default edition
-\providecommand{\currentedition}{working}
+\providecommand{\currentedition}{source}
 
 % \ifedition{edition}{content}
-%   Include content only if \currentedition matches edition.
 \newcommand{\ifedition}[2]{%
   \edef\wdt@ename{#1}%
   \edef\wdt@ecur{\currentedition}%
@@ -58,39 +67,54 @@
 }
 
 % \foreditions{ed1,ed2,...}{content}
-%   Include content if \currentedition is any of the listed editions.
 \newcommand{\foreditions}[2]{%
   \IfSubStr{,#1,}{,\currentedition,}{#2}{}%
 }
 
-% ---- Stream ----
+% ---- Stream enable/disable ----
 
-% Default stream — if unset, show formal content
-\providecommand{\currentstream}{formal}
+% Internal list of enabled streams, comma-delimited, with guard commas.
+% \providecommand so a driver can pre-initialise before \usepackage if needed,
+% but the normal pattern is to call \enablestream after \usepackage.
+\providecommand{\wdt@enabledstreams}{,}
+
+% \enablestream{name} — add name to the enabled set.
+\newcommand{\enablestream}[1]{%
+  \edef\wdt@enabledstreams{\wdt@enabledstreams#1,}%
+}
+
+% \isstreamenabled{name} — true if name is in the enabled set.
+% Usage: \isstreamenabled{lean}{\LaTeX code}
+\newcommand{\isstreamenabled}[2]{%
+  \IfSubStr{\wdt@enabledstreams}{,#1,}{#2}{}%
+}
 
 % \streambegin{name} ... \streamend{name}
-%   Include the enclosed content only when \currentstream matches name.
-%   When suppressed, content is discarded via a void vbox group.
+%   Show enclosed content only when stream name is enabled.
+%   When suppressed, content is discarded into a void vbox.
 \newcommand{\streambegin}[1]{%
-  \edef\wdt@sname{#1}%
-  \edef\wdt@scur{\currentstream}%
-  \ifx\wdt@sname\wdt@scur
-    % stream active — do nothing, content flows normally
-  \else
-    % stream inactive — open a void group to discard content
+  \IfSubStr{\wdt@enabledstreams}{,#1,}{%
+    % stream enabled — content flows normally
+  }{%
+    % stream disabled — open void group to discard content
     \setbox0=\vbox\bgroup\ignorespaces
-  \fi
+  }%
 }
 
 \newcommand{\streamend}[1]{%
-  \edef\wdt@sname{#1}%
-  \edef\wdt@scur{\currentstream}%
-  \ifx\wdt@sname\wdt@scur
-    % stream was active — do nothing
-  \else
+  \IfSubStr{\wdt@enabledstreams}{,#1,}{%
+    % stream was enabled — nothing to close
+  }{%
     % close the void group
     \egroup
-  \fi
+  }%
+}
+
+% Legacy single-stream interface — \currentstream{name} enables only that stream.
+% Provided for backwards compatibility with driver documents that predate v2.
+% New drivers should use \enablestream directly.
+\newcommand{\currentstream}[1]{%
+  \renewcommand{\wdt@enabledstreams}{,#1,}%
 }
 
 % ---- Watermark (edition-driven) ----
@@ -98,14 +122,15 @@
 \SetWatermarkScale{3}
 \SetWatermarkColor[gray]{0.88}
 
+\ifedition{source}{\SetWatermarkText{}}
+\ifedition{literate}{\SetWatermarkText{}}
+\ifedition{academic}{\SetWatermarkText{DRAFT}}
+\ifedition{rich}{\SetWatermarkText{DRAFT}}
 \ifedition{working}{\SetWatermarkText{WORKING}}
+% Legacy editions
 \ifedition{academic-strict}{\SetWatermarkText{DRAFT}}
 \ifedition{academic-liberal}{\SetWatermarkText{DRAFT}}
-\ifedition{rich}{\SetWatermarkText{DRAFT}}
 \ifedition{plain}{\SetWatermarkText{DRAFT}}
 \ifedition{lean}{\SetWatermarkText{}}
-\ifedition{literate}{\SetWatermarkText{DRAFT}}
-% Legacy single-word editions (Phase 1 compatibility)
-\ifedition{academic}{\SetWatermarkText{DRAFT}}
 \ifedition{metaphorical}{\SetWatermarkText{DRAFT}}
 \ifedition{archived}{\SetWatermarkText{ARCHIVED}}
