@@ -136,28 +136,47 @@
 
     #nav a:hover { color: #fff; }
 
+    /* push hero caption down so it doesn't sit behind the nav */
+    #hero-caption { top: 38px; }
+
+    /* ── twirl button ── */
     #btn-twirl {
-      margin-left: auto;
-      background: rgba(122,184,245,0.12);
-      border: 1px solid rgba(122,184,245,0.35);
+      position: absolute;
+      bottom: 2.2em;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: rgba(10,10,18,0.55);
+      border: 1px solid rgba(122,184,245,0.5);
       color: #7ab8f5;
       font-family: Georgia, serif;
-      font-size: 0.82em;
+      font-size: 1.1em;
       font-style: italic;
-      padding: 0 0.9em;
-      height: 24px;
-      border-radius: 3px;
+      padding: 0.45em 1.6em;
+      border-radius: 4px;
       cursor: pointer;
-      white-space: nowrap;
+      letter-spacing: 0.04em;
+      transition: opacity 0.4s, background 0.2s, color 0.2s;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      box-shadow: 0 0 12px rgba(122,184,245,0.2);
+      opacity: 0.75;
     }
 
     #btn-twirl:hover {
-      background: rgba(122,184,245,0.25);
+      opacity: 1;
+      background: rgba(122,184,245,0.18);
       color: #fff;
+      box-shadow: 0 0 20px rgba(122,184,245,0.4);
     }
 
-    /* push hero caption down so it doesn't sit behind the nav */
-    #hero-caption { top: 38px; }
+    #hero:hover #btn-twirl {
+      opacity: 0.15;
+    }
+
+    #hero:hover #btn-twirl:hover {
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
@@ -167,7 +186,6 @@
   <a href="#papers">Papers</a>
   <a href="3d/dubner-ball/index.html">3D Viewer</a>
   <a href="https://github.com/wildducktheories/twin-primes">GitHub</a>
-  <button id="btn-twirl" onclick="document.getElementById('dubner-iframe').contentWindow.postMessage('twirl','*')">twirl!</button>
 </nav>
 
 <div id="hero">
@@ -181,6 +199,7 @@
     <h1>Twin Primes</h1>
     <p>An exploration of the Twin Prime Conjecture via the additive structure of twin prime witnesses &mdash; Wild Duck Theories Pty Limited</p>
   </div>
+  <button id="btn-twirl" onclick="document.getElementById('dubner-iframe').contentWindow.postMessage('twirl','*')">twirl!</button>
 </div>
 
 <div id="papers">
