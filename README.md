@@ -28,7 +28,7 @@ machine-verified proofs of the core implication chain.
 
 ## Earlier Papers
 
-### Bridging the Gap: Additive Structure in the Twin Prime Cofactors
+### Logical Implications of a Bridging Conjecture for the Twin Prime Conjecture
 
 `papers/bridging-conjecture/`
 
