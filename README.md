@@ -1,86 +1,81 @@
 # Twin Primes
 
-An exploration of the Twin Prime Conjecture and related additive properties of the set
-A002822 — the positive integers $m$ such that $6m-1$ and $6m+1$ are both prime (twin
-prime cofactors).
+An exploration of the Twin Prime Conjecture via the additive structure of twin prime
+witnesses — the positive integers $m$ such that $6m-1$ and $6m+1$ are both prime
+(OEIS [A002822](https://oeis.org/A002822)).
+
+**Website**: [wildducktheories.github.io/twin-primes](https://wildducktheories.github.io/twin-primes/)
 
 ---
 
-## Papers
+## Primary Paper
+
+### A Structural Conjecture for the Infinitude of Twin Primes
+
+`papers/structural-conjecture/`
+
+The central thesis: **PNT ⟹ (WDC ∧ BC) ⟹ TPC**. Introduces the Bridging Conjecture
+(BC) and Witness Decomposition Conjecture (WDC), and proves BC ⟹ TPC unconditionally.
+Proposes that the Prime Number Theorem alone forces the additive closure of the set of
+twin prime witnesses — bypassing the parity obstruction that limits sieve theory.
+
+Includes the Bridging Machine, the Gap Machine, scale invariance theorems, and Lean 4
+machine-verified proofs of the core implication chain.
+
+[wdt-structural-conjecture.pdf](papers/structural-conjecture/wdt-structural-conjecture.pdf)
+
+---
+
+## Earlier Papers
 
 ### Bridging the Gap: Additive Structure in the Twin Prime Cofactors
 
 `papers/bridging-conjecture/`
 
-Introduces the **Bridging Conjecture**: for every $K$, there exist $a, b, k \in A002822$
-with $a < K$, $b < K$, and $k = a + b > K$. The paper establishes that the Bridging
-Conjecture is equivalent to the Twin Prime Conjecture assuming Dubner's Conjecture 1, and
-that it follows unconditionally from Dubner's Conjecture 3. As a corollary, the Bridging
-Conjecture implies a conditional lower bound $\pi_2(x) \gg \log x$ on the twin prime
-counting function, derived purely from the additive structure of A002822.
+Introduces the Bridging Conjecture and establishes its equivalence to TPC under
+Dubner's Middle Number Conjecture. Derives a conditional lower bound
+$\pi_2(x) \gg \log x$ from additive structure alone.
 
-The paper also re-expresses Dubner's exception set A243956 in set-theoretic terms as the
-complement of the self-sumset of A002822 in $\mathbb{N}$, which explains the additive
-origin of its elements rather than merely listing them, and reformulates Dubner's
-Conjecture 3 as the assertion that this complement is finite. An appendix provides
-heuristic evidence for both conjectures, including a gap ratio plot and a decomposition
-count plot with Hardy--Littlewood reference curves.
+[wdt-bridging-conjecture.pdf](papers/bridging-conjecture/wdt-bridging-conjecture.pdf)
 
-Read the paper:
-[wildducktheories-bridging-conjecture.pdf](https://github.com/wildducktheories/twin-primes/blob/master/papers/bridging-conjecture/wildducktheories-bridging-conjecture.pdf)
+### The Mathematics of Dubner's Ball
 
-Build the PDF with:
+`papers/dubners-ball/`
 
-```
-task pdf
-```
+The 3D visualisation of the witness set and its progenitor structure. Each node is a
+twin prime witness; each filament connects a witness to its decomposition pair. The ball
+grows to infinity if and only if BC holds.
 
----
+[wdt-dubners-ball.pdf](papers/dubners-ball/wdt-dubners-ball.pdf)
 
-## Notebook
+### Heuristic Evidence for the Bridging Conjecture
 
-`notebook/twin-primes.ipynb`
+`papers/heuristics/`
 
-An interactive Jupyter notebook exploring the conjectures computationally. Topics covered
-include:
+Decomposition gap analysis, cluster structure, and probabilistic estimates for
+simultaneous bridging failure. Empirical and analytic evidence that BC is
+overwhelmingly likely to be true.
 
-- Definitions and verification of A002822, A067611, A243956
-- Middle number decompositions and Dubner's Conjecture 1
-- The Bridging Conjecture, its gap bound, and density implications
-- Verification of Dubner's Conjecture 3 (sumset form) up to large limits
-- Congruence constraints on middle number decompositions
-- The Goldbach-twin conjecture (Dubner's Conjecture 4a)
-- Visualisations: gap ratios, decomposition counts, twin prime witnesses
-
-Open with:
-
-```
-task edit
-```
+[wdt-heuristics.pdf](papers/heuristics/wdt-heuristics.pdf)
 
 ---
 
-## Animations
+## Interactive
 
-`animations/6ab-a-b-1/`
+### Dubner's Ball — 3D Viewer
 
-A 3D animation of the twin prime witness structure, rendered with
-[Manim](https://www.manim.community/). Each point represents a witness $(a, b)$ for a
-twin prime cofactor $m \in A002822$, plotted in three dimensions with $m$ on the vertical
-axis. Green points are witnesses via the $6m-1$ neighbour; red via $6m+1$.
+`3d/dubner-ball/`
 
-Render with:
+Interactive three-dimensional visualisation of the twin prime witness progenitor tree.
+Rotate, zoom, and explore the self-similar structure of the witness set.
 
-```
-task animate
-```
+[Open viewer](https://wildducktheories.github.io/twin-primes/3d/dubner-ball/index.html)
 
 ---
 
 ## References
 
-- H. Dubner, *Twin prime conjectures*, Journal of Recreational Mathematics **30**(3),
-  1999–2000. ([PDF](papers/bridging-conjecture/sources/a007534.pdf))
-- OEIS [A002822](https://oeis.org/A002822): Numbers $m$ such that $6m-1$ and $6m+1$ are both prime.
-- OEIS [A243956](https://oeis.org/A243956): Positive integers with no representation as $i+j$ with $i,j \in A002822$.
-- OEIS [A007534](https://oeis.org/A007534): Even numbers not the sum of two primes both having a twin prime.
+- H. Dubner, *Twin Prime Conjectures*, Journal of Recreational Mathematics **30**(3), 1999–2000.
+- F. Balestrieri, *An Equivalent Problem to the Twin Prime Conjecture*, [arXiv:1106.6050](https://arxiv.org/abs/1106.6050), 2011.
+- OEIS [A002822](https://oeis.org/A002822): Twin prime cofactors.
+- OEIS [A243956](https://oeis.org/A243956): Integers with no witness decomposition.
