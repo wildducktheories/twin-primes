@@ -1,5 +1,5 @@
 name = "RequestProject"
-defaultTargets = ["Basic", "ScaleInvariance", "Machines"]
+defaultTargets = ["Basic", "ScaleInvariance", "Machines", "Corollaries", "ImplicationChain"]
 
 [[require]]
 name = "mathlib"
@@ -17,3 +17,11 @@ globs = ["ScaleInvariance"]
 [[lean_lib]]
 name = "Machines"
 globs = ["Machines"]
+
+[[lean_lib]]
+name = "Corollaries"
+globs = ["Corollaries"]
+
+[[lean_lib]]
+name = "ImplicationChain"
+globs = ["ImplicationChain"]
