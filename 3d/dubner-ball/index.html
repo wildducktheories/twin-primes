@@ -85,6 +85,7 @@
   scroll · zoom<br>
   right-drag · pan<br>
   hover · inspect<br>
+  click · ancestry<br>
   space · play/pause<br>
   ← → · step
 </div>
@@ -465,7 +466,7 @@ function checkHover() {
     tooltip.style.display = 'block';
     if (n.isWitness) {
       tooltip.innerHTML =
-        `w = ${n.w} &nbsp;|&nbsp; dequeue #${n.dequeue_idx}<br>` +
+        `w = ${n.w} &nbsp;|&nbsp; generation ${n.generation}<br>` +
         `primes: ${p1}, ${p2}<br>` +
         `progenitor: ${prog}<br>` +
         `δ<sub>uv</sub> rank = ${n.t.toFixed(3)}`;
@@ -483,6 +484,120 @@ function checkHover() {
     tooltip.style.display = 'none';
   }
 }
+
+// ── ancestry highlight ───────────────────────────────────────────────────────
+// Click a witness node to trace its progenitor chain back to witness 1.
+// Everything off the path dims; the path glows gold.
+// Click background or the same node again to clear.
+
+let ancestryActive = false;
+const GOLD = new THREE.Color(1.0, 0.85, 0.2);
+const DIM_OPACITY = 0.08;
+
+function getAncestorSet(w) {
+  const ancestors = new Set();
+  const stack = [w];
+  while (stack.length) {
+    const cur = stack.pop();
+    if (ancestors.has(cur)) continue;
+    ancestors.add(cur);
+    const n = nodeMap[cur];
+    if (n && n.prog) {
+      stack.push(n.prog[0]);
+      stack.push(n.prog[1]);
+    }
+  }
+  return ancestors;
+}
+
+function applyAncestry(w) {
+  ancestryActive = true;
+  const ancestors = getAncestorSet(w);
+
+  // Dim / brighten nodes
+  nodes.forEach(n => {
+    const mesh = nodeMeshes[n.w];
+    if (!mesh.visible) return;
+    if (ancestors.has(n.w)) {
+      mesh.material.color.copy(GOLD);
+      mesh.material.emissive.copy(GOLD).multiplyScalar(0.4);
+      mesh.material.opacity = 1;
+      mesh.material.transparent = false;
+    } else {
+      mesh.material.color.copy(dimColour(n.t)).multiplyScalar(0.15);
+      mesh.material.emissive.setHex(0x000000);
+      mesh.material.transparent = true;
+      mesh.material.opacity = DIM_OPACITY;
+    }
+  });
+
+  // Dim / brighten edges: show only edges where both endpoints are ancestors
+  edges.forEach((e, i) => {
+    if (!edgeVisibility[i]) return;
+    const onPath = ancestors.has(e.src) && ancestors.has(e.dst);
+    const base = i * 6;
+    if (onPath) {
+      edgePosArr[base]   = nodeMap[e.src].x; edgePosArr[base+1] = nodeMap[e.src].y; edgePosArr[base+2] = nodeMap[e.src].z;
+      edgePosArr[base+3] = nodeMap[e.dst].x; edgePosArr[base+4] = nodeMap[e.dst].y; edgePosArr[base+5] = nodeMap[e.dst].z;
+    } else {
+      edgePosArr.fill(NaN, base, base + 6);
+    }
+  });
+  edgePosBuf.needsUpdate = true;
+  edgeMat.opacity = 0.7;
+  edgeMat.color.set(GOLD);
+}
+
+function clearAncestry() {
+  if (!ancestryActive) return;
+  ancestryActive = false;
+
+  nodes.forEach(n => {
+    const mesh = nodeMeshes[n.w];
+    mesh.material.color.copy(dimColour(n.t));
+    mesh.material.emissive.setHex(0x000000);
+    mesh.material.transparent = false;
+    mesh.material.opacity = 1;
+  });
+
+  // Restore edges
+  edges.forEach((e, i) => {
+    if (!edgeVisibility[i]) return;
+    const base = i * 6;
+    const s = nodeMap[e.src], d = nodeMap[e.dst];
+    edgePosArr[base]   = s.x; edgePosArr[base+1] = s.y; edgePosArr[base+2] = s.z;
+    edgePosArr[base+3] = d.x; edgePosArr[base+4] = d.y; edgePosArr[base+5] = d.z;
+  });
+  edgePosBuf.needsUpdate = true;
+  edgeMat.opacity = 0.18;
+  edgeMat.color.set(0xffffff);
+}
+
+let clickedMesh = null;
+
+renderer.domElement.addEventListener('click', e => {
+  // Ignore if OrbitControls consumed a drag
+  if (controls.enabled && e.detail === 0) return;
+
+  raycaster.setFromCamera(pointer, camera);
+  const meshList = Object.values(nodeMeshes).filter(m => m.visible);
+  const hits = raycaster.intersectObjects(meshList);
+
+  if (hits.length > 0 && hits[0].object.userData.isWitness) {
+    const mesh = hits[0].object;
+    if (mesh === clickedMesh) {
+      // Second click on same node — clear
+      clickedMesh = null;
+      clearAncestry();
+    } else {
+      clickedMesh = mesh;
+      applyAncestry(mesh.userData.w);
+    }
+  } else {
+    clickedMesh = null;
+    clearAncestry();
+  }
+});
 
 // ── twirl ─────────────────────────────────────────────────────────────────────
 

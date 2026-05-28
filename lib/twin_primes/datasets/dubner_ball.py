@@ -16,7 +16,7 @@ Output JSON schema:
       "limit": 500,
       "nodes": [
         {"w": int, "x": float, "y": float, "z": float, "t": float,
-         "dequeue_idx": int, "prog": [u, v] | null}
+         "generation": int, "prog": [u, v] | null}
       ],
       "edges": [{"src": int, "dst": int}],
       "generations": [{"v": int, "children": [[u, w], ...]}],
@@ -81,7 +81,7 @@ def generate(*, limit=500, non_witnesses=False):
     A = [1]
     A_set = {1}
     q = [1]
-    dequeue_idx = {}
+    generation = {}
     progenitor = {1: None}
     pos_polar = {1: (math.log(2), math.pi / 4, 1 % 5)}
     generations = []
@@ -91,7 +91,7 @@ def generate(*, limit=500, non_witnesses=False):
 
     while q:
         v = heapq.heappop(q)
-        dequeue_idx[v] = len(dequeue_idx)
+        generation[v] = len(generation)
         children = []
 
         for u in A:
@@ -121,23 +121,23 @@ def generate(*, limit=500, non_witnesses=False):
         generations.append({"v": v, "children": children})
 
     pos_xyz = {}
-    for w in dequeue_idx:
+    for w in generation:
         r, alpha, k = pos_polar[w]
         pos_xyz[w] = _plane_to_cart(r, alpha, k)
 
     delta_uv = {}
-    for w in dequeue_idx:
+    for w in generation:
         prog = progenitor[w]
         delta_uv[w] = (prog[1] - prog[0]) / w if prog else None
 
     ranked = sorted((dv, w) for w, dv in delta_uv.items() if dv is not None)
     n = len(ranked)
-    t_colour = {w: 0.5 for w in dequeue_idx}
+    t_colour = {w: 0.5 for w in generation}
     for rank, (_, w) in enumerate(ranked):
         t_colour[w] = rank / max(n - 1, 1)
 
     nodes = []
-    for w in sorted(dequeue_idx.keys()):
+    for w in sorted(generation.keys()):
         x, y, z = pos_xyz[w]
         prog = progenitor[w]
         nodes.append({
@@ -146,12 +146,12 @@ def generate(*, limit=500, non_witnesses=False):
             "y": round(y, 6),
             "z": round(z, 6),
             "t": round(t_colour[w], 6),
-            "dequeue_idx": dequeue_idx[w],
+            "generation": generation[w],
             "prog": list(prog) if prog else None,
         })
 
     edges = []
-    for w in sorted(dequeue_idx.keys()):
+    for w in sorted(generation.keys()):
         prog = progenitor[w]
         if prog:
             u, v = prog
