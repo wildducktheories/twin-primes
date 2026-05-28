@@ -186,6 +186,33 @@ controls.dampingFactor = 0.08;
 controls.minDistance = 1;
 controls.maxDistance = 200;
 
+// ── URL camera params ─────────────────────────────────────────────────────────
+// Read:  ?cx=0&cy=0&cz=14&tx=0&ty=0&tz=0
+// The URL is updated (via replaceState) as the camera moves so the current
+// view can be bookmarked or shared.
+
+(function applyCameraParams() {
+  const p = new URLSearchParams(window.location.search);
+  const f = (key, def) => { const v = parseFloat(p.get(key)); return isNaN(v) ? def : v; };
+  camera.position.set(f('cx', 0), f('cy', 0), f('cz', 14));
+  controls.target.set(f('tx', 0), f('ty', 0), f('tz', 0));
+  controls.update();
+})();
+
+let urlUpdateTimer = null;
+controls.addEventListener('change', () => {
+  clearTimeout(urlUpdateTimer);
+  urlUpdateTimer = setTimeout(() => {
+    const r = v => Math.round(v * 1000) / 1000;
+    const cp = camera.position, ct = controls.target;
+    const q = new URLSearchParams({
+      cx: r(cp.x), cy: r(cp.y), cz: r(cp.z),
+      tx: r(ct.x), ty: r(ct.y), tz: r(ct.z),
+    });
+    history.replaceState(null, '', '?' + q.toString());
+  }, 300);
+});
+
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
