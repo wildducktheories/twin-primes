@@ -380,8 +380,8 @@ _public() {
         # Only merge if public tip is not already an ancestor of research/master
         if ! git -C "$root" merge-base --is-ancestor "$public_tip" HEAD 2>/dev/null; then
             echo "Merging public/master ($public_tip) into research/master..."
-            git -C "$root" merge --no-ff --no-edit \
-                -m "research: merge public/master into research/master (history anchor)
+            git -C "$root" merge --no-ff -s ours \
+                -m "research: anchor public/master into research/master
 
 Ensures public/master is a reachable ancestor of research/master
 before advancing the public branch tip.
