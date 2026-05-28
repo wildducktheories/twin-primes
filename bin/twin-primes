@@ -455,4 +455,35 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
     dispatch "$@"
 }
 
+_github() {
+    local root="$(cd "$(dirname "$0")/.." && pwd)"
+
+    _stage() {
+        local view="${root}/etc/views/public.yml"
+        [[ -f "$view" ]] || die "view definition not found: $view"
+        local public_repo
+        public_repo=$(y2j < "$view" | jq -r '.public_repo // "../twin-primes-public"')
+        [[ "$public_repo" = /* ]] || public_repo="$(cd "${root}/${public_repo}" && pwd)"
+
+        # Fetch local-public remote so the anchor merge succeeds
+        local remote
+        remote=$(git -C "$root" remote -v | awk '/local-public.*fetch/{print $1; exit}')
+        [[ -n "$remote" ]] && git -C "$root" fetch "$remote"
+
+        "$0" public sync
+    }
+
+    _push() {
+        local view="${root}/etc/views/public.yml"
+        [[ -f "$view" ]] || die "view definition not found: $view"
+        local public_repo
+        public_repo=$(y2j < "$view" | jq -r '.public_repo // "../twin-primes-public"')
+        [[ "$public_repo" = /* ]] || public_repo="$(cd "${root}/${public_repo}" && pwd)"
+
+        git -C "$public_repo" push
+    }
+
+    dispatch "$@"
+}
+
 dispatch "$@"
