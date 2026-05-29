@@ -235,6 +235,15 @@ const bloomPass = new UnrealBloomPass(
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
 
+// ── on-demand rendering ──
+// Only redraw when something actually changes (camera move, twirl, hover,
+// playback). When idle the loop wakes, finds nothing to do, and sleeps —
+// no GPU work, no hover raycast against the ~20k meshes.
+let needsRender = true;
+const invalidate = () => { needsRender = true; };
+controls.addEventListener('change', invalidate);
+window.addEventListener('resize', invalidate);
+
 // Ambient + directional light (helps spheres read as 3D)
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -382,6 +391,7 @@ function resetScene() {
   edgeVisibility.fill(false);
   currentStep = 0;
   updateUI();
+  invalidate();
 }
 
 function stepTo(s) {
@@ -392,6 +402,7 @@ function stepTo(s) {
   revealUpTo(s);
   currentStep = s;
   updateUI();
+  invalidate();
 }
 
 function updateUI() {
@@ -443,6 +454,7 @@ let hoveredMesh = null;
 window.addEventListener('pointermove', e => {
   pointer.x =  (e.clientX / innerWidth)  * 2 - 1;
   pointer.y = -(e.clientY / innerHeight) * 2 + 1;
+  invalidate();
 });
 
 function checkHover() {
@@ -575,6 +587,7 @@ function applyAncestry(w) {
   edgePosBuf.needsUpdate = true;
   edgeMat.opacity = 0.7;
   edgeMat.color.set(GOLD);
+  invalidate();
 }
 
 function clearAncestry() {
@@ -605,6 +618,7 @@ function clearAncestry() {
   edgePosBuf.needsUpdate = true;
   edgeMat.opacity = 0.18;
   edgeMat.color.set(0xffffff);
+  invalidate();
 }
 
 let clickedMesh = null;
@@ -677,10 +691,15 @@ window.addEventListener('message', e => {
 
 function animate() {
   requestAnimationFrame(animate);
-  updateTwirl(performance.now());
-  controls.update();
-  checkHover();
-  composer.render();
+
+  if (twirlTarget) { updateTwirl(performance.now()); needsRender = true; }
+  if (controls.update()) needsRender = true;   // damping tail keeps drawing until it settles
+
+  if (needsRender) {
+    needsRender = false;
+    checkHover();
+    composer.render();
+  }
 }
 animate();
 </script>
