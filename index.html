@@ -205,6 +205,26 @@
 </div>
 
 <script>
+  // Forward camera params from parent URL into the iframe on load.
+  (function () {
+    var iframe = document.getElementById('dubner-iframe');
+    var qs = window.location.search;
+    if (qs) {
+      // Append params to iframe src so they're available on initial load.
+      iframe.src = '3d/dubner-ball/index.html' + qs;
+    }
+    // Also relay via postMessage once the iframe is ready, and whenever
+    // the parent URL changes (e.g. back/forward navigation).
+    function relayCameraParams() {
+      var params = window.location.search;
+      if (params) {
+        iframe.contentWindow.postMessage({ type: 'camera', qs: params }, '*');
+      }
+    }
+    iframe.addEventListener('load', relayCameraParams);
+    window.addEventListener('popstate', relayCameraParams);
+  })();
+
   (function () {
     var btn = document.getElementById('btn-twirl');
     var hero = document.getElementById('hero');
@@ -241,6 +261,8 @@
 
   <div class="paper">
     <a href="papers/structural-conjecture/wdt-structural-conjecture.pdf">A Structural Conjecture for the Infinitude of Twin Primes</a>
+    &nbsp;<span style="font-size:0.85em; color:#888">&middot;</span>&nbsp;
+    <a href="papers/structural-conjecture/wdt-structural-conjecture-academic.pdf" style="font-size:0.85em">academic edition</a>
     &nbsp;<span style="font-size:0.85em; color:#888">&middot;</span>&nbsp;
     <a href="papers/structural-conjecture/wdt-structural-conjecture-lean.pdf" style="font-size:0.85em">literate Lean edition</a>
     &nbsp;<span style="font-size:0.85em; color:#888">&middot;</span>&nbsp;

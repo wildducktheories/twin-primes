@@ -110,6 +110,9 @@
   }%
 }
 
+% Counter used by stream-suppressed sections to restore the section number.
+\newcounter{wdt@sectionbefore}
+
 % Legacy single-stream interface — \currentstream{name} enables only that stream.
 % Provided for backwards compatibility with driver documents that predate v2.
 % New drivers should use \enablestream directly.

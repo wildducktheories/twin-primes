@@ -59,6 +59,16 @@
     #playbar button:hover { background: #333; }
     #step-label { min-width: 70px; }
 
+    #cam-params {
+      position: fixed; top: 12px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px; color: #555;
+      background: rgba(0,0,0,0.5);
+      padding: 3px 8px; border-radius: 3px;
+      pointer-events: none; white-space: nowrap;
+      user-select: text;
+    }
+
     #colourbar {
       position: fixed; bottom: 48px; right: 16px;
       display: flex; align-items: center; gap: 6px;
@@ -90,6 +100,7 @@
   ← → · step
 </div>
 
+<div id="cam-params"></div>
 <div id="tooltip"></div>
 
 <div id="colourbar">
@@ -210,7 +221,14 @@ controls.addEventListener('change', () => {
       cx: r(cp.x), cy: r(cp.y), cz: r(cp.z),
       tx: r(ct.x), ty: r(ct.y), tz: r(ct.z),
     });
-    history.replaceState(null, '', '?' + q.toString());
+    const qs = q.toString();
+    // Update own URL if possible (works when served directly)
+    try { history.replaceState(null, '', '?' + qs); } catch(e) {}
+    // Push to parent page URL (works when embedded in same-origin iframe)
+    try { window.parent.history.replaceState(null, '', '?' + qs); } catch(e) {}
+    // Always show params on screen and in console
+    document.getElementById('cam-params').textContent = '?' + qs;
+    console.log('camera:', qs);
   }, 300);
 });
 
@@ -670,7 +688,17 @@ function updateTwirl(now) {
 }
 
 window.addEventListener('message', e => {
-  if (e.data === 'twirl') twirl();
+  if (e.data === 'twirl') { twirl(); return; }
+  // Camera params forwarded from parent page URL
+  if (e.data && e.data.type === 'camera' && e.data.qs) {
+    const p = new URLSearchParams(e.data.qs);
+    const f = (key, def) => { const v = parseFloat(p.get(key)); return isNaN(v) ? def : v; };
+    if (p.has('cx') || p.has('cy') || p.has('cz')) {
+      camera.position.set(f('cx', camera.position.x), f('cy', camera.position.y), f('cz', camera.position.z));
+      controls.target.set(f('tx', controls.target.x), f('ty', controls.target.y), f('tz', controls.target.z));
+      controls.update();
+    }
+  }
 });
 
 // ── render loop ───────────────────────────────────────────────────────────────
