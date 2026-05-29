@@ -80,6 +80,11 @@ tasks:
     cmds:
       - bin/twin-primes export confidential
 
+  export:desktop:
+    desc: Copy public-manifest PDFs to ~/Desktop
+    cmds:
+      - bin/twin-primes export desktop
+
   export:s3:
     desc: Upload latest dist bundle and dubner-ball viewer to S3 (public)
     cmds:

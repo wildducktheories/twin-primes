@@ -224,6 +224,37 @@ SERVE
         echo "$root/dist/$tgzname"
     }
 
+    _desktop() {
+        local root="$(cd "$(dirname "$0")/.." && pwd)"
+        local view="${root}/etc/views/public.yml"
+        [[ -f "$view" ]] || die "view definition not found: $view"
+
+        local desktop="${DESKTOP:-${HOME}/Desktop}"
+        local view_json
+        view_json=$(y2j < "$view")
+        mapfile -t includes < <(jq -r '.include[]' <<< "$view_json")
+
+        local copied=0
+        for pattern in "${includes[@]}"; do
+            # Only process non-directory glob patterns ending in .pdf
+            [[ "$pattern" == */ ]] && continue
+            [[ "$pattern" == *.pdf ]] || continue
+            local matched
+            mapfile -t matched < <(cd "$root" && compgen -G "$pattern" 2>/dev/null)
+            if [[ ${#matched[@]} -eq 0 ]]; then
+                echo "warning: no files matched pattern '$pattern'" >&2
+                continue
+            fi
+            for file in "${matched[@]}"; do
+                local dest="${desktop}/$(basename "$file")"
+                cp "${root}/${file}" "$dest"
+                echo "$dest"
+                (( ++copied ))
+            done
+        done
+        echo "$copied PDF(s) exported to $desktop"
+    }
+
     _s3() {
         # TODO: 'export s3' has been broken for some time — glob expansion of
         # papers/*/wdt-*.pdf was not being resolved before passing to aws s3 sync.
