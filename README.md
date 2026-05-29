@@ -69,6 +69,16 @@ its limitations. Canonical reference for AI attribution across the programme.
 
 [wdt-ai-usage.pdf](papers/ai-usage/wdt-ai-usage.pdf)
 
+### Fiction
+
+`papers/gemima/`
+
+A long-form narrative by Gemima — a journalist who came to this story expecting a sidebar
+and found something stranger. The git log, the AI collaborators, Harvey Dubner's ghost,
+and a question addressed to a woman called Sonia on which everything depends.
+
+[wdt-gemima.pdf](papers/gemima/wdt-gemima.pdf)
+
 ---
 
 ## Interactive

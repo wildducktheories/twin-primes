@@ -19,6 +19,9 @@ includes:
   ai-usage:
     taskfile: papers/ai-usage/Taskfile.yml
     dir: papers/ai-usage
+  gemima:
+    taskfile: papers/gemima/Taskfile.yml
+    dir: papers/gemima
   heuristics:
     taskfile: papers/heuristics/Taskfile.yml
     dir: papers/heuristics
@@ -54,6 +57,7 @@ tasks:
       - task: tpc-proof:default
       - task: twin-prime-machine:default
       - task: ai-usage:default
+      - task: gemima:default
 
   clean:
     desc: Remove LaTeX auxiliary files from all papers
@@ -67,6 +71,7 @@ tasks:
       - task: tpc-proof:clean
       - task: twin-prime-machine:clean
       - task: ai-usage:clean
+      - task: gemima:clean
 
   distclean:
     desc: Remove auxiliary files and PDFs from all papers
@@ -80,6 +85,7 @@ tasks:
       - task: tpc-proof:distclean
       - task: twin-prime-machine:distclean
       - task: ai-usage:distclean
+      - task: gemima:distclean
 
   export:confidential:
     desc: Build a timestamped confidential tgz bundle with SHA1 manifest
