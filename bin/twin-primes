@@ -370,12 +370,17 @@ _public() {
         # Merge current public/master tip into research/master (history-only).
         # This ensures public/master is always a reachable ancestor of research/master
         # before we advance the public tip.
-        local public_tip
-        public_tip=$(git -C "$public_repo" rev-parse HEAD)
         local research_branch
         research_branch=$(git -C "$root" rev-parse --abbrev-ref HEAD)
         [[ "$research_branch" == "research/master" ]] || \
             die "research repo must be on research/master (currently: $research_branch)"
+
+        # Fetch public repo's master into research repo's object database so
+        # merge-base --is-ancestor can find the commit.
+        git -C "$root" fetch "$public_repo" master 2>/dev/null
+
+        local public_tip
+        public_tip=$(git -C "$public_repo" rev-parse HEAD)
 
         # Only merge if public tip is not already an ancestor of research/master
         if ! git -C "$root" merge-base --is-ancestor "$public_tip" HEAD 2>/dev/null; then
