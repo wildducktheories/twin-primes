@@ -58,6 +58,17 @@ overwhelmingly likely to be true.
 
 [wdt-heuristics.pdf](papers/heuristics/wdt-heuristics.pdf)
 
+### How AI Was Used
+
+`papers/ai-usage/`
+
+A full transparency statement documenting the role of AI systems (Claude, Aristotle,
+ChatGPT, Gemini) in the development of this research. Describes what each system
+contributed, what the author contributed, the ticket loop review methodology, and
+its limitations. Canonical reference for AI attribution across the programme.
+
+[wdt-ai-usage.pdf](papers/ai-usage/wdt-ai-usage.pdf)
+
 ---
 
 ## Interactive
