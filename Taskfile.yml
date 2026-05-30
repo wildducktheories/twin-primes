@@ -5,8 +5,8 @@ includes:
     taskfile: papers/background-research/Taskfile.yml
     dir: papers/background-research
   structural-conjecture:
-    taskfile: papers/structural-conjecture/Taskfile.yml
-    dir: papers/structural-conjecture
+    taskfile: papers/structural/Taskfile.yml
+    dir: papers/structural
   bridging-conjecture:
     taskfile: papers/bridging-conjecture/Taskfile.yml
     dir: papers/bridging-conjecture
@@ -22,6 +22,9 @@ includes:
   gemima:
     taskfile: papers/gemima/Taskfile.yml
     dir: papers/gemima
+  erdos-imperative:
+    taskfile: papers/erdos-imperative/Taskfile.yml
+    dir: papers/erdos-imperative
   heuristics:
     taskfile: papers/heuristics/Taskfile.yml
     dir: papers/heuristics
@@ -58,6 +61,7 @@ tasks:
       - task: twin-prime-machine:default
       - task: ai-usage:default
       - task: gemima:default
+      - task: erdos-imperative:default
 
   clean:
     desc: Remove LaTeX auxiliary files from all papers
@@ -72,6 +76,7 @@ tasks:
       - task: twin-prime-machine:clean
       - task: ai-usage:clean
       - task: gemima:clean
+      - task: erdos-imperative:clean
 
   distclean:
     desc: Remove auxiliary files and PDFs from all papers
@@ -86,6 +91,7 @@ tasks:
       - task: twin-prime-machine:distclean
       - task: ai-usage:distclean
       - task: gemima:distclean
+      - task: erdos-imperative:distclean
 
   export:confidential:
     desc: Build a timestamped confidential tgz bundle with SHA1 manifest

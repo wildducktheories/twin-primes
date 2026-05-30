@@ -111,7 +111,37 @@
 }
 
 % Counter used by stream-suppressed sections to restore the section number.
+% Deprecated: no longer needed when all sections use \dialecticsection or
+% \rhetoricsection, which set the counter explicitly. Retained for compatibility.
 \newcounter{wdt@sectionbefore}
+
+% ---- Chromosome section numbering ----
+%
+% Sections are numbered by the twin prime chromosome sequences:
+%   Dialectic stream (A002822): 1, 2, 3, 5, 7, 10, 12, 15, 18, 20, 22, 25, 27, 28, ...
+%   Rhetoric stream  (A067611): 0, 4, 6, 8, 9, 11, 13, 14, 16, 17, 19, 21, 23, 24, ...
+% Together these cover all of N. The section number IS the mathematics.
+%
+% Section numbers in the rendered document need not be monotone in reading order:
+% a rhetoric section (e.g. the Interlude at 4) may render after a dialectic section
+% with a higher number (e.g. Algebraic Constraints at 5). This is intentional.
+%
+% When a rhetoric section is suppressed (academic edition), the \streambegin vbox
+% discards the \rhetoricsection call, so the counter is never touched. The next
+% section sets its own counter explicitly. No save/restore needed.
+
+% \dialecticsection{N}{title} — section with A002822 number N
+\newcommand{\dialecticsection}[2]{%
+  \setcounter{section}{\numexpr#1-1\relax}%
+  \section{#2}%
+}
+
+% \rhetoricsection{N}{title} — section with A067611 number N
+% Must be used inside \streambegin{metaphorical}...\streamend{metaphorical}.
+\newcommand{\rhetoricsection}[2]{%
+  \setcounter{section}{\numexpr#1-1\relax}%
+  \section{#2}%
+}
 
 % Legacy single-stream interface — \currentstream{name} enables only that stream.
 % Provided for backwards compatibility with driver documents that predate v2.

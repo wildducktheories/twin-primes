@@ -257,23 +257,40 @@
 
 <div id="papers">
 
-  <h2>Primary Paper</h2>
+  <h2>Primary Papers</h2>
 
   <div class="paper">
-    <a href="papers/structural-conjecture/wdt-structural-conjecture.pdf">A Structural Conjecture for the Infinitude of Twin Primes</a>
-    &nbsp;<span style="font-size:0.85em; color:#888">&middot;</span>&nbsp;
-    <a href="papers/structural-conjecture/wdt-structural-conjecture-academic.pdf" style="font-size:0.85em">academic edition</a>
-    &nbsp;<span style="font-size:0.85em; color:#888">&middot;</span>&nbsp;
-    <a href="papers/structural-conjecture/wdt-structural-conjecture-lean.pdf" style="font-size:0.85em">literate Lean edition</a>
-    &nbsp;<span style="font-size:0.85em; color:#888">&middot;</span>&nbsp;
-    <a href="papers/structural-conjecture/lean/" style="font-size:0.85em">Lean&nbsp;4 source</a>
+    <a href="papers/structural/wdt-structural-conjecture-academic.pdf">The Structural Conjecture for the Infinitude of Twin Primes</a>
     <p class="desc">
-      The central thesis: PNT &rArr; (WDC &and; BC) &rArr; TPC. Introduces the Bridging Conjecture (BC) and
-      Witness Decomposition Conjecture (WDC), proves BC &rArr; TPC unconditionally, and proposes
-      that the Prime Number Theorem alone forces the additive closure of the set of twin prime witnesses
-      &mdash; bypassing the parity obstruction that limits sieve theory.
-      Includes the Bridging Machine, the Gap Machine, scale invariance theorems, and
-      Lean&nbsp;4 machine-verified proofs of the core implication chain (zero <code>sorry</code>).
+      <strong>The conjecture:</strong> PNT &rArr; (WDC &and; BC) &rArr; TPC.
+      A single analytic fact &mdash; the Prime Number Theorem &mdash; forces the additive
+      closure of the set of twin prime witnesses, bypassing the parity obstruction.
+      The right-hand arrow BC &rArr; TPC is proved unconditionally; the left-hand
+      arrow is the open conjecture. Includes Lean&nbsp;4 machine-verified proofs
+      of the full proved chain (zero <code>sorry</code>). Academic edition.
+    </p>
+  </div>
+
+  <div class="paper">
+    <a href="papers/structural/wdt-structural-hypothesis.pdf">A Structural Hypothesis for the Infinitude of Twin Primes</a>
+    &nbsp;<span style="font-size:0.85em; color:#888">&middot;</span>&nbsp;
+    <a href="papers/structural/wdt-structural-conjecture-lean.pdf" style="font-size:0.85em">literate Lean edition</a>
+    &nbsp;<span style="font-size:0.85em; color:#888">&middot;</span>&nbsp;
+    <a href="papers/structural/lean/" style="font-size:0.85em">Lean&nbsp;4 source</a>
+    <p class="desc">
+      The source edition: full mathematical development with the Bridging Machine,
+      the Gap Machine, scale invariance theorems, the mod-5 menagerie, and the
+      channel exhaustion route.
+    </p>
+  </div>
+
+  <div class="paper">
+    <a href="papers/erdos-imperative/wdt-erdos-imperative-published.pdf">The Erd&#x0151;s Imperative: Bertrand&rsquo;s Postulate as a Route to the Twin Prime Conjecture</a>
+    <p class="desc">
+      CE &rArr; TPC via Bertrand&rsquo;s Postulate, without appeal to the Prime Number Theorem.
+      Formally verified in Lean&nbsp;4 with zero <code>sorry</code>. The single remaining
+      ingredient for a full proof of TPC is a proof of Channel Exhaustion.
+      Part&nbsp;2 (the open frontier) is available in the source edition.
     </p>
   </div>
 

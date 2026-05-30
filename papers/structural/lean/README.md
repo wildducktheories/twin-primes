@@ -28,6 +28,6 @@ All files compile with **zero `sorry`** against Lean 4 / Mathlib v4.28.0.
 Requires Lean 4 and Lake. With `elan` installed:
 
 ```
-cd papers/structural-conjecture/lean
+cd papers/structural/lean
 lake build
 ```

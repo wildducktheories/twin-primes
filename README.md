@@ -12,7 +12,7 @@ witnesses — the positive integers $m$ such that $6m-1$ and $6m+1$ are both pri
 
 ### A Structural Conjecture for the Infinitude of Twin Primes
 
-`papers/structural-conjecture/`
+`papers/structural/`
 
 The central thesis: **PNT ⟹ (WDC ∧ BC) ⟹ TPC**. Introduces the Bridging Conjecture
 (BC) and Witness Decomposition Conjecture (WDC), and proves BC ⟹ TPC unconditionally.
@@ -22,7 +22,7 @@ twin prime witnesses — bypassing the parity obstruction that limits sieve theo
 Includes the Bridging Machine, the Gap Machine, scale invariance theorems, and Lean 4
 machine-verified proofs of the core implication chain.
 
-[wdt-structural-conjecture.pdf](papers/structural-conjecture/wdt-structural-conjecture.pdf)
+[wdt-structural-hypothesis.pdf](papers/structural/wdt-structural-hypothesis.pdf)
 
 ---
 
