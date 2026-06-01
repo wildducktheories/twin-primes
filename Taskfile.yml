@@ -28,6 +28,9 @@ includes:
   heuristics:
     taskfile: papers/heuristics/Taskfile.yml
     dir: papers/heuristics
+  pnt-structural:
+    taskfile: papers/pnt-structural/Taskfile.yml
+    dir: papers/pnt-structural
   muxing:
     taskfile: papers/muxing/Taskfile.yml
     dir: papers/muxing
@@ -62,6 +65,7 @@ tasks:
       - task: ai-usage:default
       - task: gemima:default
       - task: erdos-imperative:default
+      - task: pnt-structural:default
 
   clean:
     desc: Remove LaTeX auxiliary files from all papers
@@ -77,6 +81,7 @@ tasks:
       - task: ai-usage:clean
       - task: gemima:clean
       - task: erdos-imperative:clean
+      - task: pnt-structural:clean
 
   distclean:
     desc: Remove auxiliary files and PDFs from all papers
@@ -92,6 +97,7 @@ tasks:
       - task: ai-usage:distclean
       - task: gemima:distclean
       - task: erdos-imperative:distclean
+      - task: pnt-structural:distclean
 
   export:confidential:
     desc: Build a timestamped confidential tgz bundle with SHA1 manifest
