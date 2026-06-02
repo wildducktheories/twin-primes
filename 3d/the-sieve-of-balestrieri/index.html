@@ -1,0 +1,453 @@
+<!--
+  The Sieve of Balestrieri — 2D log-log view of the Balestrieri sieve
+  x = n,  y = f = 6n ± c ± d  where n = c·d (divisor pairs)
+  Witnesses are horizontal lines that miss every cloud.
+  Copyright (C) 2026 Wild Duck Theories Australia Pty Limited. All rights reserved.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The Sieve of Balestrieri</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #07070f; color: #ccc; font-family: monospace; overflow: hidden; }
+    #canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+    #ui {
+      position: fixed; top: 12px; left: 12px;
+      pointer-events: none; display: flex; flex-direction: column; gap: 4px;
+    }
+    #ui h1 { font-size: 13px; color: #fff; font-weight: normal; }
+    #ui .sub { font-size: 11px; color: #666; }
+    #tooltip {
+      position: fixed; bottom: 16px; left: 12px;
+      font-size: 11px; color: #aaa;
+      pointer-events: none;
+    }
+    #legend {
+      position: fixed; top: 12px; right: 12px;
+      font-size: 11px; color: #888; text-align: right;
+      line-height: 1.8; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="ui">
+  <h1>The Sieve of Balestrieri</h1>
+  <div class="sub">f = 6n ± c ± d &nbsp; n = c·d</div>
+  <div class="sub">log-log axes &nbsp; scroll to zoom &nbsp; drag to pan &nbsp; click witness for Dubner's Steps</div>
+  <div style="margin-top:6px; pointer-events:all;">
+    <button id="btn-steps"
+      style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
+             color:#ccc;font-family:monospace;font-size:11px;padding:3px 8px;
+             border-radius:3px;cursor:pointer;margin-bottom:4px;">
+      Dubner's Steps: (click witness)
+    </button><br>
+    <button id="btn-adjacent"
+      style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
+             color:#ccc;font-family:monospace;font-size:11px;padding:3px 8px;
+             border-radius:3px;cursor:pointer;margin-bottom:4px;">
+      adjacent only: off
+    </button><br>
+    <button id="btn-witnesses"
+      style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
+             color:#ccc;font-family:monospace;font-size:11px;padding:3px 8px;
+             border-radius:3px;cursor:pointer;">
+      witness lines: off
+    </button>
+  </div>
+</div>
+<div id="legend">
+  <span style="color:#4488ff">·</span> cloud point f = 6n ± c ± d &nbsp; (c,d divisors of n, n = cd)<br>
+  <span style="color:#ffb432">·</span> adjacent to witness (f±1 = w)<br>
+  <span style="color:#ff4444">—</span> twin prime witness w<br>
+  <span style="color:rgba(255,200,50,0.8)">⌐</span> Dubner's Steps (ancestry to 1)<br>
+  <span style="color:#555">—</span> reference line f = 6n
+</div>
+<div id="tooltip"></div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const tip = document.getElementById('tooltip');
+
+let W = window.innerWidth, H = window.innerHeight;
+canvas.width = W; canvas.height = H;
+
+// ─── view state (log-log) ─────────────────────────────────────────────────────
+// We map log(n) → screen x,  log(f) → screen y
+const PAD = { l: 55, r: 20, t: 30, b: 45 };
+
+let viewX = { min: Math.log(1), max: Math.log(520) };   // log(n) range
+let viewY = { min: Math.log(4), max: Math.log(3600) };  // log(f) range
+
+function toScreen(logN, logF) {
+  const px = W - PAD.l - PAD.r;
+  const py = H - PAD.t - PAD.b;
+  const sx = PAD.l + (logN - viewX.min) / (viewX.max - viewX.min) * px;
+  const sy = PAD.t + (1 - (logF - viewY.min) / (viewY.max - viewY.min)) * py;
+  return [sx, sy];
+}
+function fromScreen(sx, sy) {
+  const px = W - PAD.l - PAD.r;
+  const py = H - PAD.t - PAD.b;
+  const logN = viewX.min + (sx - PAD.l) / px * (viewX.max - viewX.min);
+  const logF = viewY.min + (1 - (sy - PAD.t) / py) * (viewY.max - viewY.min);
+  return [logN, logF];
+}
+
+// ─── data ────────────────────────────────────────────────────────────────────
+let clouds = [], witnesses = [], witnessSet = new Set();
+let filterAdjacent = false;   // show only f adjacent to a witness
+let showWitnesses = false;    // show red witness lines
+let selectedWitness = null;   // clicked witness for Dubner's Steps
+let showSteps = false;        // show Dubner's Steps
+let allSteps = [];            // precomputed steps for all witnesses
+
+// Build ancestry steps as actual cloud-point corners.
+// Each step: {w, v, nW, fW, nV, fV}
+//   - (nW, fW): cloud point adjacent to w (f = w±1), rightmost available
+//   - (nV, fV): cloud point adjacent to v (f = v±1), with nV <= nW
+// Drawing: (nW, fW) -> down to (nW, fV) -> left to (nV, fV)
+function ancestrySteps(w) {
+  const steps = [];
+  let cur = w;
+  let maxN = Infinity;  // constrain rightward extent
+  while (cur > 1) {
+    // find decomposition cur = u + v, u <= v, both in W; prefer largest v
+    let decomp = null;
+    for (let i = witnesses.length - 1; i >= 0; i--) {
+      const v = witnesses[i];
+      if (v >= cur) continue;
+      const u = cur - v;
+      if (u > v) continue;
+      if (u < 1) continue;
+      if (witnessSet.has(u)) { decomp = { v, u }; break; }
+    }
+    if (!decomp) break;
+    const { v } = decomp;
+
+    // pick cloud point for cur: rightmost adj point with n <= maxN
+    const adjW = (adjMap[cur] || []).filter(p => p.n <= maxN);
+    if (!adjW.length) break;
+    const ptW = adjW[0];  // rightmost (sorted desc)
+
+    // pick cloud point for v: rightmost adj point with n <= ptW.n
+    const adjV = (adjMap[v] || []).filter(p => p.n <= ptW.n);
+    if (!adjV.length) break;
+    const ptV = adjV[0];
+
+    steps.push({ w: cur, v, nW: ptW.n, fW: ptW.f, nV: ptV.n, fV: ptV.f });
+    maxN = ptV.n;
+    cur = v;
+  }
+  return steps;
+}
+
+let adjMap = {};  // w -> [{n, f}] sorted by n descending
+
+fetch('data.json').then(r => r.json()).then(data => {
+  clouds = data.clouds;
+  witnesses = data.witnesses;
+  witnessSet = new Set(witnesses);
+  // build adjacency map: witness -> cloud points where f = w±1
+  adjMap = {};
+  for (const { n, f: fs } of clouds) {
+    for (const f of fs) {
+      for (const w of [f - 1, f + 1]) {
+        if (witnessSet.has(w)) {
+          if (!adjMap[w]) adjMap[w] = [];
+          adjMap[w].push({ n, f });
+        }
+      }
+    }
+  }
+  // sort each list by n descending (rightmost first)
+  for (const w of Object.keys(adjMap)) {
+    adjMap[w].sort((a, b) => b.n - a.n);
+  }
+  // precompute steps for all witnesses
+  allSteps = witnesses.map(w => ({ w, steps: ancestrySteps(w) }));
+  draw();
+});
+
+// ─── draw ─────────────────────────────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // background
+  ctx.fillStyle = '#07070f';
+  ctx.fillRect(0, 0, W, H);
+
+  // clip to plot area
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(PAD.l, PAD.t, W - PAD.l - PAD.r, H - PAD.t - PAD.b);
+  ctx.clip();
+
+  // ── reference line f = 6n ─────────────────────────────────────────────────
+  ctx.strokeStyle = 'rgba(80,80,80,0.5)';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  // f=6n → log(f) = log(6) + log(n)
+  const logN0 = viewX.min, logN1 = viewX.max;
+  const [x0, y0] = toScreen(logN0, logN0 + Math.log(6));
+  const [x1, y1] = toScreen(logN1, logN1 + Math.log(6));
+  ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── f=5n and f=7n envelope ─────────────────────────────────────────────────
+  ctx.strokeStyle = 'rgba(60,60,80,0.4)';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([2, 6]);
+  for (const k of [5, 7]) {
+    ctx.beginPath();
+    const [ax, ay] = toScreen(logN0, logN0 + Math.log(k));
+    const [bx, by] = toScreen(logN1, logN1 + Math.log(k));
+    ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // ── cloud points — clipped to visible f range; x clipped to where clouds exist ──
+  // First pass: find rightmost x with any visible cloud point
+  let maxVisibleSX = PAD.l;
+  for (const { n, f: fs } of clouds) {
+    const logN = Math.log(n);
+    if (logN < viewX.min - 0.1 || logN > viewX.max + 0.1) continue;
+    for (const f of fs) {
+      if (filterAdjacent && !witnessSet.has(f - 1) && !witnessSet.has(f + 1)) continue;
+      const logF = Math.log(f);
+      if (logF < viewY.min - 0.1 || logF > viewY.max + 0.1) continue;
+      const [sx] = toScreen(logN, logF);
+      if (sx > maxVisibleSX) maxVisibleSX = sx;
+    }
+  }
+
+  // Second pass: draw points
+  for (const { n, f: fs } of clouds) {
+    const logN = Math.log(n);
+    if (logN < viewX.min - 0.1 || logN > viewX.max + 0.1) continue;
+    for (const f of fs) {
+      if (filterAdjacent && !witnessSet.has(f - 1) && !witnessSet.has(f + 1)) continue;
+      const logF = Math.log(f);
+      if (logF < viewY.min - 0.1 || logF > viewY.max + 0.1) continue;
+      const [sx, sy] = toScreen(logN, logF);
+      const adjacent = witnessSet.has(f - 1) || witnessSet.has(f + 1);
+      ctx.fillStyle = adjacent ? 'rgba(255,180,50,0.85)' : 'rgba(68,136,255,0.6)';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ── Dubner's Steps — left/down staircase for selected witness ───────────
+  if (showSteps && selectedWitness) {
+    const entry = allSteps.find(s => s.w === selectedWitness);
+    if (entry && entry.steps.length) {
+      ctx.strokeStyle = 'rgba(255,200,50,0.9)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      let started = false;
+      for (const { w: sw, v, nW, nV } of entry.steps) {
+        const [sxW, syW] = toScreen(Math.log(nW), Math.log(sw));
+        const [sxV, syV] = toScreen(Math.log(nV), Math.log(v));
+        if (!started) { ctx.moveTo(sxW, syW); started = true; }
+        else { ctx.lineTo(sxW, syW); }
+        ctx.lineTo(sxV, syW);   // slide left at w level
+        ctx.lineTo(sxV, syV);   // drop down to v level
+      }
+      ctx.stroke();
+    }
+  }
+
+  // ── witness lines — only drawn up to right edge of visible cloud ─────────
+  for (const w of witnesses) {
+    const logW = Math.log(w);
+    if (logW < viewY.min || logW > viewY.max) continue;
+    const isSel = w === selectedWitness;
+    if (!isSel && !showWitnesses) continue;
+    const [, sy] = toScreen(0, logW);
+    ctx.strokeStyle = isSel ? 'rgba(255,200,50,0.9)' : 'rgba(255,68,68,0.5)';
+    ctx.lineWidth = isSel ? 1.2 : 0.6;
+    ctx.beginPath();
+    ctx.moveTo(PAD.l, sy);
+    ctx.lineTo(maxVisibleSX, sy);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  // ── axes ──────────────────────────────────────────────────────────────────
+  drawAxes();
+}
+
+function niceLogTicks(min, max) {
+  // Powers of 10 and halves
+  const ticks = [];
+  const lo = Math.floor(Math.log10(Math.exp(min)));
+  const hi = Math.ceil(Math.log10(Math.exp(max)));
+  for (let p = lo; p <= hi; p++) {
+    for (const m of [1, 2, 5]) {
+      const v = m * Math.pow(10, p);
+      const lv = Math.log(v);
+      if (lv >= min && lv <= max) ticks.push(v);
+    }
+  }
+  return ticks;
+}
+
+function drawAxes() {
+  ctx.fillStyle = '#555';
+  ctx.font = '10px monospace';
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 0.5;
+
+  // x-axis (n)
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const v of niceLogTicks(viewX.min, viewX.max)) {
+    const [sx] = toScreen(Math.log(v), 0);
+    ctx.beginPath(); ctx.moveTo(sx, H - PAD.b); ctx.lineTo(sx, H - PAD.b + 4); ctx.stroke();
+    ctx.fillText(v, sx, H - PAD.b + 6);
+  }
+  ctx.fillStyle = '#888';
+  ctx.fillText('n  (log scale)', PAD.l + (W - PAD.l - PAD.r) / 2, H - 14);
+
+  // y-axis (f)
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#555';
+  for (const v of niceLogTicks(viewY.min, viewY.max)) {
+    const [, sy] = toScreen(0, Math.log(v));
+    ctx.beginPath(); ctx.moveTo(PAD.l, sy); ctx.lineTo(PAD.l - 4, sy); ctx.stroke();
+    ctx.fillText(v, PAD.l - 6, sy);
+  }
+  ctx.save();
+  ctx.translate(14, PAD.t + (H - PAD.t - PAD.b) / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle = '#888'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('f  (log scale)', 0, 0);
+  ctx.restore();
+
+  // border
+  ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
+  ctx.strokeRect(PAD.l, PAD.t, W - PAD.l - PAD.r, H - PAD.t - PAD.b);
+}
+
+// ─── zoom / pan ───────────────────────────────────────────────────────────────
+const LOG1 = 0;   // log(1) = 0 — left boundary; never pan past n=1
+
+function clampView() {
+  if (viewX.min < LOG1) {
+    const shift = LOG1 - viewX.min;
+    viewX.min += shift;
+    viewX.max += shift;
+  }
+}
+
+let dragging = false, dragStart = null, viewStart = null;
+
+canvas.addEventListener('mousedown', e => {
+  dragging = true;
+  dragStart = [e.clientX, e.clientY];
+  viewStart = { x: { ...viewX }, y: { ...viewY } };
+});
+canvas.addEventListener('mousemove', e => {
+  if (dragging) {
+    const dx = e.clientX - dragStart[0];
+    const dy = e.clientY - dragStart[1];
+    const px = W - PAD.l - PAD.r;
+    const py = H - PAD.t - PAD.b;
+    const dLogN = -dx / px * (viewStart.x.max - viewStart.x.min);
+    const dLogF =  dy / py * (viewStart.y.max - viewStart.y.min);
+    viewX.min = viewStart.x.min + dLogN;
+    viewX.max = viewStart.x.max + dLogN;
+    viewY.min = viewStart.y.min + dLogF;
+    viewY.max = viewStart.y.max + dLogF;
+    clampView();
+    draw();
+  }
+  // tooltip: nearest n
+  const [logN, logF] = fromScreen(e.clientX, e.clientY);
+  const n = Math.round(Math.exp(logN));
+  const f = Math.round(Math.exp(logF));
+  const isW = witnessSet.has(f);
+  const tipText = `n = ${n}  f ≈ ${f}${isW ? '  ← witness!' : ''}`;
+  tip.textContent = tipText;
+});
+canvas.addEventListener('mouseup', e => {
+  if (dragging && (Math.abs(e.clientX - dragStart[0]) > 3 || Math.abs(e.clientY - dragStart[1]) > 3)) {
+    dragging = false;
+    return;
+  }
+  dragging = false;
+  // snap click to nearest visible witness
+  const [, logF] = fromScreen(e.clientX, e.clientY);
+  const f = Math.exp(logF);
+  let best = null, bestDist = Infinity;
+  for (const w of witnesses) {
+    const d = Math.abs(Math.log(w) - Math.log(f));
+    if (d < bestDist) { bestDist = d; best = w; }
+  }
+  const SNAP_PX = 12;
+  const [, syBest] = best ? toScreen(0, Math.log(best)) : [0, 0];
+  const withinSnap = best && Math.abs(syBest - e.clientY) < SNAP_PX;
+  if (withinSnap) {
+    selectedWitness = (selectedWitness === best) ? null : best;
+    if (selectedWitness) showSteps = true;
+    const btn = document.getElementById('btn-steps');
+    btn.textContent = selectedWitness
+      ? `Dubner's Steps: w=${selectedWitness}`
+      : `Dubner's Steps: (click witness)`;
+    btn.style.background = selectedWitness ? 'rgba(255,200,50,0.25)' : 'rgba(255,255,255,0.08)';
+    draw();
+  }
+});
+canvas.addEventListener('mouseleave', () => { dragging = false; });
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY > 0 ? 1.12 : 0.89;
+  const [logN, logF] = fromScreen(e.clientX, e.clientY);
+  // zoom around cursor
+  viewX.min = logN + (viewX.min - logN) * factor;
+  viewX.max = logN + (viewX.max - logN) * factor;
+  viewY.min = logF + (viewY.min - logF) * factor;
+  viewY.max = logF + (viewY.max - logF) * factor;
+  clampView();
+  draw();
+}, { passive: false });
+
+document.getElementById('btn-steps').addEventListener('click', function() {
+  selectedWitness = null;
+  showSteps = false;
+  this.textContent = `Dubner's Steps: (click witness)`;
+  this.style.background = 'rgba(255,255,255,0.08)';
+  draw();
+});
+
+document.getElementById('btn-adjacent').addEventListener('click', function() {
+  filterAdjacent = !filterAdjacent;
+  this.textContent = `adjacent only: ${filterAdjacent ? 'on' : 'off'}`;
+  this.style.background = filterAdjacent ? 'rgba(255,180,50,0.25)' : 'rgba(255,255,255,0.08)';
+  draw();
+});
+
+document.getElementById('btn-witnesses').addEventListener('click', function() {
+  showWitnesses = !showWitnesses;
+  this.textContent = `witness lines: ${showWitnesses ? 'on' : 'off'}`;
+  this.style.background = showWitnesses ? 'rgba(255,68,68,0.25)' : 'rgba(255,255,255,0.08)';
+  draw();
+});
+
+window.addEventListener('resize', () => {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W; canvas.height = H;
+  draw();
+});
+</script>
+</body>
+</html>
