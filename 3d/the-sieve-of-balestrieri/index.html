@@ -53,15 +53,28 @@
     <button id="btn-witnesses"
       style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
              color:#ccc;font-family:monospace;font-size:11px;padding:3px 8px;
-             border-radius:3px;cursor:pointer;">
+             border-radius:3px;cursor:pointer;margin-bottom:4px;">
       witness lines: off
-    </button>
+    </button><br>
+    <button id="btn-false-witnesses"
+      style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
+             color:#ccc;font-family:monospace;font-size:11px;padding:3px 8px;
+             border-radius:3px;cursor:pointer;margin-bottom:4px;">
+      false witness lines: off
+    </button><br>
+    <label style="font-size:11px;color:#ccc;cursor:pointer;">
+      <input type="checkbox" id="chk-equal-aspect" style="cursor:pointer;vertical-align:middle;">
+      equal aspect ratio
+    </label>
   </div>
 </div>
 <div id="legend">
   <span style="color:#4488ff">·</span> cloud point f = 6n ± c ± d &nbsp; (c,d divisors of n, n = cd)<br>
   <span style="color:#ffb432">·</span> adjacent to witness (f±1 = w)<br>
   <span style="color:#ff4444">—</span> twin prime witness w<br>
+  <span style="color:rgba(80,160,255,0.8)">—</span> false witness (one prime only)<br>
+  <span style="color:rgba(255,140,180,0.8)">- -</span> thread c=C (hover)<br>
+  <span style="color:rgba(80,220,120,0.8)">- -</span> normal to thread (hover)<br>
   <span style="color:rgba(255,200,50,0.8)">⌐</span> Dubner's Steps (ancestry to 1)<br>
   <span style="color:#555">—</span> reference line f = 6n
 </div>
@@ -99,11 +112,15 @@ function fromScreen(sx, sy) {
 
 // ─── data ────────────────────────────────────────────────────────────────────
 let clouds = [], witnesses = [], witnessSet = new Set();
+let falseWitnesses = [], falseWitnessSet = new Set();
 let filterAdjacent = false;   // show only f adjacent to a witness
 let showWitnesses = false;    // show red witness lines
+let showFalseWitnesses = false; // show blue false witness lines
 let selectedWitness = null;   // clicked witness for Dubner's Steps
 let showSteps = false;        // show Dubner's Steps
 let allSteps = [];            // precomputed steps for all witnesses
+let hoveredPoint = null;      // {n, f, pairs} for c=C line overlay
+let equalAspect = false;      // lock log-unit scale equal on both axes
 
 // Build ancestry steps as actual cloud-point corners.
 // Each step: {w, v, nW, fW, nV, fV}
@@ -151,6 +168,8 @@ fetch('data.json').then(r => r.json()).then(data => {
   clouds = data.clouds;
   witnesses = data.witnesses;
   witnessSet = new Set(witnesses);
+  falseWitnesses = data.false_witnesses || [];
+  falseWitnessSet = new Set(falseWitnesses);
   // build adjacency map: witness -> cloud points where f = w±1
   adjMap = {};
   for (const { n, f: fs } of clouds) {
@@ -171,6 +190,33 @@ fetch('data.json').then(r => r.json()).then(data => {
   allSteps = witnesses.map(w => ({ w, steps: ancestrySteps(w) }));
   draw();
 });
+
+// ─── divisor pairs for tooltip ───────────────────────────────────────────────
+// Given n and f, find all (c,d) with c<=d, cd=n, f = 6cd ± c ± d
+// Returns list of {c, d, sc, sd} where f = 6cd + sc*c + sd*d
+function divisorPairs(n, f) {
+  const result = [];
+  const seen = new Set();
+  for (let c = 1; c * c <= n; c++) {
+    if (n % c !== 0) continue;
+    const d = n / c;
+    for (const sc of [1, -1]) {
+      for (const sd of [1, -1]) {
+        if (6*c*d + sc*c + sd*d === f) {
+          const k = `${c},${d},${sc},${sd}`;
+          if (!seen.has(k)) { seen.add(k); result.push({c, d, sc, sd}); }
+        }
+      }
+    }
+  }
+  return result;
+}
+
+function fmtPair({c, d, sc, sd}) {
+  const scs = sc > 0 ? '+' : '-';
+  const sds = sd > 0 ? '+' : '-';
+  return `6·${c*d} ${scs} ${c} ${sds} ${d}`;
+}
 
 // ─── draw ─────────────────────────────────────────────────────────────────────
 function draw() {
@@ -265,6 +311,67 @@ function draw() {
     }
   }
 
+  // ── c=C thread lines (pink) and normals (green) for hovered point ────────
+  if (hoveredPoint) {
+    const { n: n0, f: f0, pairs } = hoveredPoint;
+    const steps = 300;
+
+    for (const {c, sc, sd} of pairs) {
+      // ── pink thread: f = (6c+sd)/c * n + sc*c  (exact in linear space) ──
+      ctx.strokeStyle = 'rgba(255,140,180,0.7)';
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      let started = false;
+      for (let i = 0; i <= steps; i++) {
+        const logN = viewX.min + i / steps * (viewX.max - viewX.min);
+        const n = Math.exp(logN);
+        if (n < c) continue;
+        const fVal = (6*c + sd) * (n / c) + sc * c;
+        if (fVal <= 0) continue;
+        const logF = Math.log(fVal);
+        if (logF < viewY.min - 0.2 || logF > viewY.max + 0.2) { started = false; continue; }
+        const [sx, sy] = toScreen(logN, logF);
+        if (!started) { ctx.moveTo(sx, sy); started = true; }
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.stroke();
+
+      // ── green normal: perpendicular to thread in log-log space ──────────
+      // log-log tangent slope of thread at (n0,f0): (n0/f0)*(6c+sd)/c
+      // normal slope in log-log: -f0*c / (n0*(6c+sd))
+      const logTangent = (n0 / f0) * (6*c + sd) / c;
+      const logNormalSlope = -1 / logTangent;
+      const logN0 = Math.log(n0), logF0 = Math.log(f0);
+      ctx.strokeStyle = 'rgba(80,220,120,0.7)';
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([2, 5]);
+      ctx.beginPath();
+      // straight line in log-log: phi = logF0 + logNormalSlope*(xi - logN0)
+      const [sxA, syA] = toScreen(viewX.min, logF0 + logNormalSlope * (viewX.min - logN0));
+      const [sxB, syB] = toScreen(viewX.max, logF0 + logNormalSlope * (viewX.max - logN0));
+      ctx.moveTo(sxA, syA);
+      ctx.lineTo(sxB, syB);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  // ── false witness lines — blue, toggled ──────────────────────────────────
+  if (showFalseWitnesses) {
+    for (const fw of falseWitnesses) {
+      const logFW = Math.log(fw);
+      if (logFW < viewY.min || logFW > viewY.max) continue;
+      const [, sy] = toScreen(0, logFW);
+      ctx.strokeStyle = 'rgba(80,160,255,0.4)';
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(PAD.l, sy);
+      ctx.lineTo(maxVisibleSX, sy);
+      ctx.stroke();
+    }
+  }
+
   // ── witness lines — only drawn up to right edge of visible cloud ─────────
   for (const w of witnesses) {
     const logW = Math.log(w);
@@ -340,7 +447,31 @@ function drawAxes() {
 // ─── zoom / pan ───────────────────────────────────────────────────────────────
 const LOG1 = 0;   // log(1) = 0 — left boundary; never pan past n=1
 
+// Force equal log-unit scale on both axes by expanding the narrower axis
+// around its centre, preserving the current view centre.
+function enforceEqualAspect() {
+  const px = W - PAD.l - PAD.r;
+  const py = H - PAD.t - PAD.b;
+  const scaleX = (viewX.max - viewX.min) / px;  // log-units per pixel, x
+  const scaleY = (viewY.max - viewY.min) / py;  // log-units per pixel, y
+  if (Math.abs(scaleX - scaleY) < 1e-12) return;
+  if (scaleX > scaleY) {
+    // x is wider — expand y to match
+    const cy = (viewY.min + viewY.max) / 2;
+    const half = scaleX * py / 2;
+    viewY.min = cy - half;
+    viewY.max = cy + half;
+  } else {
+    // y is wider — expand x to match
+    const cx = (viewX.min + viewX.max) / 2;
+    const half = scaleY * px / 2;
+    viewX.min = cx - half;
+    viewX.max = cx + half;
+  }
+}
+
 function clampView() {
+  if (equalAspect) enforceEqualAspect();
   if (viewX.min < LOG1) {
     const shift = LOG1 - viewX.min;
     viewX.min += shift;
@@ -375,8 +506,16 @@ canvas.addEventListener('mousemove', e => {
   const n = Math.round(Math.exp(logN));
   const f = Math.round(Math.exp(logF));
   const isW = witnessSet.has(f);
-  const tipText = `n = ${n}  f ≈ ${f}${isW ? '  ← witness!' : ''}`;
+  const isFW = falseWitnessSet.has(f);
+  const pairs = divisorPairs(n, f);
+  const pairStr = pairs.length ? '  ' + pairs.map(fmtPair).join(', ') : '';
+  const tipText = `n = ${n}  f ≈ ${f}${pairStr}${isW ? '  ← witness!' : isFW ? '  ← false witness' : ''}`;
   tip.textContent = tipText;
+  // update c=C line overlay
+  const newHovered = pairs.length ? { n, f, pairs } : null;
+  const changed = JSON.stringify(newHovered) !== JSON.stringify(hoveredPoint);
+  hoveredPoint = newHovered;
+  if (changed) draw();
 });
 canvas.addEventListener('mouseup', e => {
   if (dragging && (Math.abs(e.clientX - dragStart[0]) > 3 || Math.abs(e.clientY - dragStart[1]) > 3)) {
@@ -406,7 +545,7 @@ canvas.addEventListener('mouseup', e => {
     draw();
   }
 });
-canvas.addEventListener('mouseleave', () => { dragging = false; });
+canvas.addEventListener('mouseleave', () => { dragging = false; hoveredPoint = null; draw(); });
 
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
@@ -440,6 +579,19 @@ document.getElementById('btn-witnesses').addEventListener('click', function() {
   showWitnesses = !showWitnesses;
   this.textContent = `witness lines: ${showWitnesses ? 'on' : 'off'}`;
   this.style.background = showWitnesses ? 'rgba(255,68,68,0.25)' : 'rgba(255,255,255,0.08)';
+  draw();
+});
+
+document.getElementById('btn-false-witnesses').addEventListener('click', function() {
+  showFalseWitnesses = !showFalseWitnesses;
+  this.textContent = `false witness lines: ${showFalseWitnesses ? 'on' : 'off'}`;
+  this.style.background = showFalseWitnesses ? 'rgba(80,160,255,0.25)' : 'rgba(255,255,255,0.08)';
+  draw();
+});
+
+document.getElementById('chk-equal-aspect').addEventListener('change', function() {
+  equalAspect = this.checked;
+  clampView();
   draw();
 });
 
