@@ -65,6 +65,10 @@
     <label style="font-size:11px;color:#ccc;cursor:pointer;">
       <input type="checkbox" id="chk-equal-aspect" style="cursor:pointer;vertical-align:middle;">
       equal aspect ratio
+    </label><br>
+    <label style="font-size:11px;color:#ccc;cursor:pointer;">
+      <input type="checkbox" id="chk-rightmost" style="cursor:pointer;vertical-align:middle;">
+      rightmost obstruction per f-line
     </label>
   </div>
 </div>
@@ -121,9 +125,11 @@ let selectedWitness = null;   // clicked witness for Dubner's Steps
 let showSteps = false;        // show Dubner's Steps
 let allSteps = [];            // precomputed steps for all witnesses
 let hoveredPoint = null;          // {n, f, pairs} for c=C line overlay
-let hoveredWitness = null;        // witness value being hovered, for BC band parallelogram
+let hoveredWitness = null;        // witness value being hovered, for BC band trapezium
 let hoveredWitnessCounts = null;  // {w, f_top, countObs, countWitInBand, countFWInBand}
 let equalAspect = false;      // lock log-unit scale equal on both axes
+let showRightmost = false;    // highlight rightmost obstruction per f-line, dim rest
+let rightmostN = new Map();   // f -> max n among all cloud points with that f
 
 // Build ancestry steps as actual cloud-point corners.
 // Each step: {w, v, nW, fW, nV, fV}
@@ -188,6 +194,13 @@ fetch('data.json').then(r => r.json()).then(data => {
   // sort each list by n descending (rightmost first)
   for (const w of Object.keys(adjMap)) {
     adjMap[w].sort((a, b) => b.n - a.n);
+  }
+  // precompute rightmost n per f-value
+  rightmostN = new Map();
+  for (const { n, f: fs } of clouds) {
+    for (const f of fs) {
+      if (!rightmostN.has(f) || n > rightmostN.get(f)) rightmostN.set(f, n);
+    }
   }
   // precompute steps for all witnesses
   allSteps = witnesses.map(w => ({ w, steps: ancestrySteps(w) }));
@@ -261,102 +274,105 @@ function draw() {
   }
   ctx.setLineDash([]);
 
-  // ── BC band parallelogram for hovered witness ────────────────────────────────
-  // The two slanted edges are c=1 thread curves through the bottom vertices,
-  // drawn identically to the pink hover lines (sampled in log-log space).
-  // Bottom edge: f=w horizontal from n_min to n_r (rightmost adjacency).
-  // Top edge: f=f_top horizontal between the two thread curves.
-  // Left slanted edge:  c=1 thread through (n_min, ~w)  — the f=7n±1 branch
-  // Right slanted edge: c=1 thread through (n_r,   ~w)  — whichever c=1 branch hits n_r adj to w
+  // ── BC band trapezium for hovered witness ────────────────────────────────
+  // Natural coordinate: n_center = ceil((w+1)/5).
+  // f_bottom = 5*n_center - 1  (right edge f=5n-1 at n_center)
+  // f_top    = 7*n_center + 1  (left  edge f=7n+1 at n_center)
+  // Corners:
+  //   BL: (floor((5*n_center-2)/7), f_bottom)  — left edge meets bottom
+  //   BR: (n_center, f_bottom)                  — right edge at n_center
+  //   TL: (n_center, f_top)                     — left edge at n_center
+  //   TR: (ceil((7*n_center+2)/5), f_top)       — right edge meets top
   if (hoveredWitness) {
-    const w = hoveredWitness;
-    const adj = adjMap[w];
-    if (adj && adj.length) {
-      const n_center = adj[0].n;  // rightmost adjacency = n_center
-      // f_max = reflection of w across f=6n_center
-      const f_max_band = 2 * 6 * n_center - w;
-      // n_max: rightmost cloud point at f = f_max_band
-      let n_max = n_center;
-      for (const { n: cn, f: cfs } of clouds) {
-        if (cfs.includes(f_max_band) && cn > n_max) n_max = cn;
-      }
-      const f_top = f_max_band;
-      // n_min: where f=7n+1 meets f=w, i.e. n = (w-1)/7
-      const n_min = (w - 1) / 7;
+    const n_center = hoveredWitness;   // hoveredWitness is now n_center directly
+    const f_bottom = 5 * n_center - 1;
+    const f_top    = 7 * n_center + 1;
+    // corner n-values (rational — not snapped to integers)
+    const n_bl = (5 * n_center - 2) / 7;
+    const n_tr = (7 * n_center + 2) / 5;
 
-      // Fixed c=1 thread branches:
-      //   left edge:  f = 7n - 1  (sd=+1, sc=-1)  — passes through (n_min, 7*n_min-1)
-      //   right edge: f = 5n - 1  (sd=-1, sc=-1)  — passes through (n_r,   5*n_r-1)
-      // n_r = where f=5n-1 meets f=w: n_r = (w+1)/5
-      const n_r = (w + 1) / 5;
-      const branchL = { sd: +1, sc: +1 };  // f = 7n + 1
-      const branchR = { sd: -1, sc: -1 };  // f = 5n - 1
-
-      // draw a c=1 thread curve clamped to f in [w, f_top]
-      function drawThread(sd, sc) {
-        ctx.beginPath();
-        let started = false;
-        const STEPS = 200;
-        const nLo = (w     - sc) / (6 + sd);
-        const nHi = (f_top - sc) / (6 + sd);
-        for (let i = 0; i <= STEPS; i++) {
-          const n = nLo + i / STEPS * (nHi - nLo);
-          if (n <= 0) continue;
-          const fVal = (6 + sd) * n + sc;
-          if (fVal < w - 0.5 || fVal > f_top + 0.5) continue;
-          const [sx, sy] = toScreen(Math.log(n), Math.log(fVal));
-          if (!started) { ctx.moveTo(sx, sy); started = true; }
-          else ctx.lineTo(sx, sy);
-        }
-        ctx.stroke();
-      }
-
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255,140,180,0.85)';
-      ctx.lineWidth = 1.2;
-      ctx.setLineDash([4, 4]);
-
-      // left slanted edge: f = 7n - 1
-      drawThread(branchL.sd, branchL.sc);
-      // right slanted edge: f = 5n - 1
-      drawThread(branchR.sd, branchR.sc);
-
-      // bottom horizontal edge: f=w from n_min to n_r
+    // draw a c=1 thread curve between two f-values:
+    //   left edge:  f = 7n + 1  (sd=+1, sc=+1)
+    //   right edge: f = 5n - 1  (sd=-1, sc=-1)
+    function drawThread(sd, sc, fLo, fHi) {
       ctx.beginPath();
-      ctx.moveTo(...toScreen(Math.log(n_min), Math.log(w)));
-      ctx.lineTo(...toScreen(Math.log(n_r),   Math.log(w)));
-      ctx.stroke();
-
-      // top horizontal edge: f=f_top between the two thread curves
-      const n_top_l = (f_top - branchL.sc) / (6 + branchL.sd);  // (f_top+1)/7
-      const n_top_r = (f_top - branchR.sc) / (6 + branchR.sd);  // (f_top+1)/5
-      ctx.beginPath();
-      ctx.moveTo(...toScreen(Math.log(n_top_l), Math.log(f_top)));
-      ctx.lineTo(...toScreen(Math.log(n_top_r), Math.log(f_top)));
-      ctx.stroke();
-
-      // ── count inside parallelogram: w <= f <= f_top AND 5n-1 <= f <= 7n+1 ──
-      // obstruction points = individual (n,f) cloud points
-      // obstructed lines = distinct f values with at least one cloud point
-      let countObsPoints = 0;
-      const obstructedF = new Set();
-      for (const { n: cn, f: cfs } of clouds) {
-        for (const cf of cfs) {
-          if (cf >= w && cf <= f_top && cf >= 5*cn - 1 && cf <= 7*cn + 1) {
-            countObsPoints++;
-            obstructedF.add(cf);
-          }
-        }
+      let started = false;
+      const STEPS = 200;
+      const nLo = (fLo - sc) / (6 + sd);
+      const nHi = (fHi - sc) / (6 + sd);
+      for (let i = 0; i <= STEPS; i++) {
+        const n = nLo + i / STEPS * (nHi - nLo);
+        if (n <= 0) continue;
+        const fVal = (6 + sd) * n + sc;
+        if (fVal < fLo - 0.5 || fVal > fHi + 0.5) continue;
+        const [sx, sy] = toScreen(Math.log(n), Math.log(fVal));
+        if (!started) { ctx.moveTo(sx, sy); started = true; }
+        else ctx.lineTo(sx, sy);
       }
-      const countObsLines = obstructedF.size;
-      // witnesses and false witnesses: count distinct f lines in [w, f_top]
-      let countWitInBand = 0, countFWInBand = 0;
-      for (const ww of witnesses)      { if (ww >= w && ww <= f_top) countWitInBand++; }
-      for (const fw of falseWitnesses) { if (fw >= w && fw <= f_top) countFWInBand++; }
-
-      // stash counts for display after clip region ends
-      hoveredWitnessCounts = { w, f_top, countObsPoints, countWitInBand, countFWInBand };
+      ctx.stroke();
     }
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,140,180,0.85)';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 4]);
+
+    // left slanted edge: f = 7n + 1, from f_bottom to f_top
+    drawThread(+1, +1, f_bottom, f_top);
+    // right slanted edge: f = 5n - 1, from f_bottom to f_top
+    drawThread(-1, -1, f_bottom, f_top);
+
+    // bottom horizontal edge: f=f_bottom from n_bl to n_center
+    ctx.beginPath();
+    ctx.moveTo(...toScreen(Math.log(n_bl),     Math.log(f_bottom)));
+    ctx.lineTo(...toScreen(Math.log(n_center), Math.log(f_bottom)));
+    ctx.stroke();
+
+    // top horizontal edge: f=f_top from n_center to n_tr
+    ctx.beginPath();
+    ctx.moveTo(...toScreen(Math.log(n_center), Math.log(f_top)));
+    ctx.lineTo(...toScreen(Math.log(n_tr),     Math.log(f_top)));
+    ctx.stroke();
+
+    // vertical at n_center from f_bottom to f_top — splits tile into LHS and RHS triangles
+    ctx.beginPath();
+    ctx.moveTo(...toScreen(Math.log(n_center), Math.log(f_bottom)));
+    ctx.lineTo(...toScreen(Math.log(n_center), Math.log(f_top)));
+    ctx.stroke();
+
+    // horizontal from centre of vertical (n_center, 6*n_center) to right edge f=5n-1
+    // right edge meets f=6*n_center at n = (6*n_center + 1) / 5
+    const n_right = (6 * n_center + 1) / 5;
+    ctx.beginPath();
+    ctx.moveTo(...toScreen(Math.log(n_center), Math.log(6 * n_center)));
+    ctx.lineTo(...toScreen(Math.log(n_right),  Math.log(6 * n_center)));
+    ctx.stroke();
+
+    // line from centre of vertical (n_center, 6*n_center) to where f=6n meets top edge f=f_top
+    // f=6n meets f_top=7*n_center+1 at n = (7*n_center+1)/6
+    const n_top_6n = (7 * n_center + 1) / 6;
+    ctx.beginPath();
+    ctx.moveTo(...toScreen(Math.log(n_center),   Math.log(6 * n_center)));
+    ctx.lineTo(...toScreen(Math.log(n_top_6n),   Math.log(f_top)));
+    ctx.stroke();
+
+    ctx.restore();
+
+    // ── count inside trapezium: f_bottom <= f <= f_top AND 5n-1 <= f <= 7n+1 ──
+    let countObsPoints = 0;
+    for (const { n: cn, f: cfs } of clouds) {
+      for (const cf of cfs) {
+        if (cf > f_bottom && cf < f_top && cf >= 5*cn - 1 && cf <= 7*cn + 1) {
+          countObsPoints++;
+        }
+      }
+    }
+    let countWitInBand = 0, countFWInBand = 0;
+    for (const ww of witnesses)      { if (ww > f_bottom && ww < f_top) countWitInBand++; }
+    for (const fw of falseWitnesses) { if (fw > f_bottom && fw < f_top) countFWInBand++; }
+
+    // stash counts for display after clip region ends
+    hoveredWitnessCounts = { n_center, f_bottom, f_top, countObsPoints, countWitInBand, countFWInBand };
   }
 
   // ── cloud points — clipped to visible f range; x clipped to where clouds exist ──
@@ -384,9 +400,20 @@ function draw() {
       if (logF < viewY.min - 0.1 || logF > viewY.max + 0.1) continue;
       const [sx, sy] = toScreen(logN, logF);
       const adjacent = witnessSet.has(f - 1) || witnessSet.has(f + 1);
-      ctx.fillStyle = adjacent ? 'rgba(255,180,50,0.85)' : 'rgba(68,136,255,0.6)';
+      let pointColor;
+      if (showRightmost) {
+        const isRightmost = rightmostN.get(f) === n;
+        if (isRightmost) {
+          pointColor = adjacent ? 'rgba(255,180,50,1.0)' : 'rgba(255,100,100,1.0)';
+        } else {
+          pointColor = adjacent ? 'rgba(255,180,50,0.12)' : 'rgba(68,136,255,0.12)';
+        }
+      } else {
+        pointColor = adjacent ? 'rgba(255,180,50,0.85)' : 'rgba(68,136,255,0.6)';
+      }
+      ctx.fillStyle = pointColor;
       ctx.beginPath();
-      ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
+      ctx.arc(sx, sy, showRightmost && rightmostN.get(f) === n ? 2.5 : 1.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -480,8 +507,8 @@ function draw() {
     const isSel = w === selectedWitness;
     if (!isSel && !showWitnesses) continue;
     const [, sy] = toScreen(0, logW);
-    ctx.strokeStyle = isSel ? 'rgba(255,200,50,0.9)' : 'rgba(255,68,68,0.5)';
-    ctx.lineWidth = isSel ? 1.2 : 0.6;
+    ctx.strokeStyle = isSel ? 'rgba(255,200,50,0.9)' : 'rgba(255,68,68,0.85)';
+    ctx.lineWidth = isSel ? 1.2 : 0.9;
     ctx.beginPath();
     ctx.moveTo(PAD.l, sy);
     ctx.lineTo(maxVisibleSX, sy);
@@ -490,13 +517,14 @@ function draw() {
 
   ctx.restore();
 
-  // ── parallelogram counts (bottom-right, outside clip) ────────────────────
+  // ── trapezium counts (bottom-right, outside clip) ────────────────────
   if (hoveredWitnessCounts) {
-    const { w, f_top, countObsPoints, countWitInBand, countFWInBand } = hoveredWitnessCounts;
+    const { n_center, f_bottom, f_top, countObsPoints, countWitInBand, countFWInBand } = hoveredWitnessCounts;
+    const witRatio = (countWitInBand / (2 * n_center)).toFixed(4);
     const lines = [
-      `w = ${w}  band [${w}, ${f_top}]`,
+      `n = ${n_center}  band [${f_bottom}, ${f_top}]`,
       `obstruction points: ${countObsPoints}`,
-      `witness lines: ${countWitInBand}`,
+      `witness lines: ${countWitInBand}  (${witRatio} × 2n)`,
       `false witness lines: ${countFWInBand}`,
     ];
     ctx.save();
@@ -639,18 +667,8 @@ canvas.addEventListener('mousemove', e => {
   tip.textContent = tipText;
   // update c=C line overlay
   const newHovered = pairs.length ? { n, f, pairs } : null;
-  // update hovered witness: snap to nearest witness line within 8px
-  let newHoveredWitness = null;
-  const WITNESS_SNAP_PX = 8;
-  for (const ww of witnesses) {
-    const logWW = Math.log(ww);
-    if (logWW < viewY.min || logWW > viewY.max) continue;
-    const [, syW] = toScreen(0, logWW);
-    if (Math.abs(syW - e.clientY) < WITNESS_SNAP_PX) {
-      newHoveredWitness = ww;
-      break;
-    }
-  }
+  // trapezium selector: n_center = nearest integer n from mouse x position
+  const newHoveredWitness = n >= 1 ? n : null;
   const changed = JSON.stringify(newHovered) !== JSON.stringify(hoveredPoint)
                || newHoveredWitness !== hoveredWitness;
   hoveredPoint = newHovered;
@@ -732,6 +750,11 @@ document.getElementById('btn-false-witnesses').addEventListener('click', functio
 document.getElementById('chk-equal-aspect').addEventListener('change', function() {
   equalAspect = this.checked;
   clampView();
+  draw();
+});
+
+document.getElementById('chk-rightmost').addEventListener('change', function() {
+  showRightmost = this.checked;
   draw();
 });
 
